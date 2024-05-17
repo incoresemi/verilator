@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -25,11 +25,14 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
-#include "V3Global.h"
 #include "V3CUse.h"
+
 #include "V3Ast.h"
+#include "V3Global.h"
 
 #include <set>
+
+VL_DEFINE_DEBUG_FUNCTIONS;
 
 //######################################################################
 
@@ -42,41 +45,71 @@ class CUseVisitor final : public VNVisitor {
     const VNUser1InUse m_inuser1;
 
     // MEMBERS
-    bool m_impOnly = false;  // In details needed only for implementation
     AstNodeModule* const m_modp;  // Current module
     std::set<std::pair<VUseType, std::string>> m_didUse;  // What we already used
+    bool m_dtypesImplOnly = false;
 
     // METHODS
     void addNewUse(AstNode* nodep, VUseType useType, const string& name) {
+        if (m_dtypesImplOnly
+            && (useType == VUseType::INT_INCLUDE || useType == VUseType::INT_FWD_CLASS))
+            return;
+
         if (m_didUse.emplace(useType, name).second) {
             AstCUse* const newp = new AstCUse{nodep->fileline(), useType, name};
-            m_modp->addStmtp(newp);
+            m_modp->addStmtsp(newp);
             UINFO(8, "Insert " << newp << endl);
         }
     }
 
     // VISITORS
-    virtual void visit(AstClassRefDType* nodep) override {
+    void visit(AstClassRefDType* nodep) override {
         if (nodep->user1SetOnce()) return;  // Process once
-        if (!m_impOnly) addNewUse(nodep, VUseType::INT_FWD_CLASS, nodep->classp()->name());
-        // Need to include extends() when we implement, but no need for pointers to know
-        VL_RESTORER(m_impOnly);
+        addNewUse(nodep, VUseType::INT_FWD_CLASS, nodep->classp()->name());
+    }
+    void visit(AstCFunc* nodep) override {
+        if (nodep->user1SetOnce()) return;  // Process once
+        iterateAndNextNull(nodep->argsp());
+
         {
-            m_impOnly = true;
-            iterateChildren(nodep->classp());  // This also gets all extend classes
+            VL_RESTORER(m_dtypesImplOnly);
+            m_dtypesImplOnly = true;
+
+            iterateAndNextNull(nodep->initsp());
+            iterateAndNextNull(nodep->stmtsp());
+            iterateAndNextNull(nodep->finalsp());
         }
     }
-    virtual void visit(AstNodeDType* nodep) override {
+    void visit(AstCReturn* nodep) override {
+        if (nodep->user1SetOnce()) return;  // Process once
+        if (m_dtypesImplOnly) {
+            for (AstNode* exprp = nodep->op1p(); exprp; exprp = exprp->nextp()) {
+                if (exprp->dtypep()) iterate(exprp->dtypep());
+            }
+        } else {
+            iterateChildren(nodep);
+        }
+    }
+    void visit(AstNodeDType* nodep) override {
         if (nodep->user1SetOnce()) return;  // Process once
         if (nodep->virtRefDTypep()) iterate(nodep->virtRefDTypep());
         if (nodep->virtRefDType2p()) iterate(nodep->virtRefDType2p());
+
+        // Add a CUse for every struct that requires a declaration
+        AstNodeUOrStructDType* const stypep = VN_CAST(nodep->skipRefp(), NodeUOrStructDType);
+        if (stypep && stypep->classOrPackagep()) {
+            addNewUse(nodep, VUseType::INT_INCLUDE, stypep->classOrPackagep()->name());
+            iterateChildren(stypep);
+        } else if (AstClassRefDType* const classp = VN_CAST(nodep->skipRefp(), ClassRefDType)) {
+            addNewUse(nodep, VUseType::INT_FWD_CLASS, classp->name());
+        }
     }
-    virtual void visit(AstNode* nodep) override {
+    void visit(AstNode* nodep) override {
         if (nodep->user1SetOnce()) return;  // Process once
         if (nodep->dtypep() && !nodep->dtypep()->user1()) iterate(nodep->dtypep());
         iterateChildren(nodep);
     }
-    virtual void visit(AstCell* nodep) override {
+    void visit(AstCell* nodep) override {
         if (nodep->user1SetOnce()) return;  // Process once
         // Currently no IMP_INCLUDE because we include __Syms which has them all
         addNewUse(nodep, VUseType::INT_FWD_CLASS, nodep->modp()->name());
@@ -89,7 +122,7 @@ public:
         : m_modp(modp) {
         iterate(modp);
     }
-    virtual ~CUseVisitor() override = default;
+    ~CUseVisitor() override = default;
     VL_UNCOPYABLE(CUseVisitor);
 };
 
@@ -105,5 +138,5 @@ void V3CUse::cUseAll() {
         // for each output file and put under that
         CUseVisitor{modp};
     }
-    V3Global::dumpCheckGlobalTree("cuse", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
+    V3Global::dumpCheckGlobalTree("cuse", 0, dumpTreeLevel() >= 3);
 }

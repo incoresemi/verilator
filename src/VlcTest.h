@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -20,8 +20,8 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
-#include "VlcPoint.h"
 #include "VlcBucket.h"
+#include "VlcPoint.h"
 
 #include <map>
 #include <vector>
@@ -63,20 +63,21 @@ public:
 
     // METHODS
     static void dumpHeader() {
-        cout << "Tests:\n";
-        // cout<<"  Testrun, Computrons,";  // Currently not loaded
-        cout << "  Covered,     Rank,  RankPts,  Filename\n";
+        std::cout << "Tests:\n";
+        // std::cout<<"  Testrun, Computrons,";  // Currently not loaded
+        std::cout << "  Covered,     Rank,  RankPts,  Filename\n";
     }
     void dump(bool bucketsToo) {
         if (testrun() || computrons() != 0.0) {  // currently unused // LCOV_EXCL_LINE
-            cout << "  " << std::setw(8) << std::setfill('0') << testrun()  // LCOV_EXCL_LINE
-                 << ",  " << std::setw(7) << std::setfill(' ') << computrons()  // LCOV_EXCL_LINE
-                 << ",";  // LCOV_EXCL_LINE
+            std::cout << "  " << std::setw(8) << std::setfill('0') << testrun()  // LCOV_EXCL_LINE
+                      << ",  " << std::setw(7) << std::setfill(' ')
+                      << computrons()  // LCOV_EXCL_LINE
+                      << ",";  // LCOV_EXCL_LINE
         }
-        cout << "  " << std::setw(7) << std::setfill(' ') << bucketsCovered();
-        cout << ",  " << std::setw(7) << std::setfill(' ') << rank();
-        cout << ",  " << std::setw(7) << std::setfill(' ') << rankPoints();
-        cout << ",  \"" << name() << "\"\n";
+        std::cout << "  " << std::setw(7) << std::setfill(' ') << bucketsCovered();
+        std::cout << ",  " << std::setw(7) << std::setfill(' ') << rank();
+        std::cout << ",  " << std::setw(7) << std::setfill(' ') << rankPoints();
+        std::cout << ",  \"" << name() << "\"\n";
         if (bucketsToo) m_buckets.dump();
     }
 };
@@ -92,6 +93,8 @@ public:
 private:
     // MEMBERS
     ByName m_tests;  //< List of all tests
+
+    static int debug() { return V3Error::debugDefault(); }
 
 public:
     // ITERATORS

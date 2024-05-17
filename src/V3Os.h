@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -35,19 +35,22 @@ public:
     static void setenvStr(const string& envvar, const string& value, const string& why);
 
     // METHODS (generic filename utilities)
-    static string filenameFromDirBase(const string& dir, const string& basename);
-    /// Return non-directory part of filename
-    static string filenameNonDir(const string& filename);
-    /// Return non-extensioned (no .) part of filename
-    static string filenameNonExt(const string& filename);
-    static string filenameNonDirExt(const string& filename) {  ///< Return basename of filename
+    static string filenameFromDirBase(const string& dir, const string& basename) VL_PURE;
+    ///< Return non-directory part of filename
+    static string filenameNonDir(const string& filename) VL_PURE;
+    ///< Return non-extensioned (no .) part of filename
+    static string filenameNonExt(const string& filename) VL_PURE;
+    ///< Return basename of filename
+    static string filenameNonDirExt(const string& filename) VL_PURE {
         return filenameNonExt(filenameNonDir(filename));
     }
-    static string filenameDir(const string& filename);  ///< Return directory part of filename
+    ///< Return directory part of filename
+    static string filenameDir(const string& filename) VL_PURE;
     /// Return filename with env vars removed
     static string filenameSubstitute(const string& filename);
-    static string filenameRealPath(const string& filename);  ///< Return realpath of filename
-    static bool filenameIsRel(const string& filename);  ///< True if relative
+    ///< Return realpath of filename
+    static string filenameRealPath(const string& filename) VL_PURE;
+    static bool filenameIsRel(const string& filename) VL_PURE;  ///< True if relative
 
     // METHODS (file utilities)
     static string getline(std::istream& is, char delim = '\n');
@@ -58,7 +61,7 @@ public:
 
     // METHODS (random)
     static uint64_t rand64(std::array<uint64_t, 2>& stater);
-    static string trueRandom(size_t size);
+    static string trueRandom(size_t size) VL_MT_SAFE;
 
     // METHODS (time & performance)
     static void u_sleep(int64_t usec);  ///< Sleep for a given number of microseconds.

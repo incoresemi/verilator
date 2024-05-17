@@ -3,7 +3,7 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2001-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -24,8 +24,10 @@
 #define VERILATOR_VERILATED_SAVE_CPP_
 
 #include "verilatedos.h"
-#include "verilated.h"
+
 #include "verilated_save.h"
+
+#include "verilated.h"
 #include "verilated_imp.h"
 
 #include <cerrno>
@@ -38,13 +40,13 @@
 # include <unistd.h>
 #endif
 
-#ifndef O_LARGEFILE  // For example on WIN32
+#ifndef O_LARGEFILE  // WIN32 headers omit this
 # define O_LARGEFILE 0
 #endif
-#ifndef O_NONBLOCK
+#ifndef O_NONBLOCK  // WIN32 headers omit this
 # define O_NONBLOCK 0
 #endif
-#ifndef O_CLOEXEC
+#ifndef O_CLOEXEC  // WIN32 headers omit this
 # define O_CLOEXEC 0
 #endif
 // clang-format on
@@ -58,7 +60,7 @@ static const char* const VLTSAVE_TRAILER_STR = "vltsaved";
 //=============================================================================
 //=============================================================================
 //=============================================================================
-// Searalization
+// Serialization
 
 bool VerilatedDeserialize::readDiffers(const void* __restrict datap,
                                        size_t size) VL_MT_UNSAFE_ONE {
@@ -170,18 +172,18 @@ void VerilatedRestore::open(const char* filenamep) VL_MT_UNSAFE_ONE {
     header();
 }
 
-void VerilatedSave::close() VL_MT_UNSAFE_ONE {
+void VerilatedSave::closeImp() VL_MT_UNSAFE_ONE {
     if (!isOpen()) return;
     trailer();
-    flush();
+    flushImp();
     m_isOpen = false;
     ::close(m_fd);  // May get error, just ignore it
 }
 
-void VerilatedRestore::close() VL_MT_UNSAFE_ONE {
+void VerilatedRestore::closeImp() VL_MT_UNSAFE_ONE {
     if (!isOpen()) return;
     trailer();
-    flush();
+    flushImp();
     m_isOpen = false;
     ::close(m_fd);  // May get error, just ignore it
 }
@@ -189,7 +191,7 @@ void VerilatedRestore::close() VL_MT_UNSAFE_ONE {
 //=============================================================================
 // Buffer management
 
-void VerilatedSave::flush() VL_MT_UNSAFE_ONE {
+void VerilatedSave::flushImp() VL_MT_UNSAFE_ONE {
     m_assertOne.check();
     if (VL_UNLIKELY(!isOpen())) return;
     const uint8_t* wp = m_bufp;

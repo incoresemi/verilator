@@ -5,7 +5,7 @@
 #
 # Code available from: https://verilator.org
 #
-# Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+# Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 # can redistribute it and/or modify it under the terms of either the GNU
 # Lesser General Public License Version 3 or the Perl Artistic License
 # Version 2.0.
@@ -18,11 +18,15 @@
 RST2HTML = rst2html
 PYTHON3 = python3
 DOXYGEN = doxygen
-SPHINXOPTS ?= -c guide
 SPHINXBUILD ?= sphinx-build
 
 SOURCEDIR = guide
 BUILDDIR = _build
+
+SPHINXOPTS ?= -c guide
+ifneq ($(VERILATOR_ANALYTICS_ID),)
+SPHINXOPTS += -D html_theme_options.analytics_id=$(VERILATOR_ANALYTICS_ID)
+endif
 
 ######################################################################
 

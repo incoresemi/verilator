@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -29,8 +29,8 @@
 class VOptionBool;
 #endif
 
-// Typycal usage would look as below.
-// See also V3Options::parseOptsList() in V3Optoins.cpp for more detailed usage.
+// Typical usage would look as below.
+// See also V3Options::parseOptsList() in V3Options.cpp for more detailed usage.
 //
 //    V3OptionParser parser;
 //    V3OptionParser::AppendHelper DECL_OPTION{parser};
@@ -43,7 +43,7 @@ class VOptionBool;
 //        if (int consumed = parser.parse(i, argc, argv)) {
 //            i += consumed;
 //        } else {  // error
-//            cerr << parser.getSuggestion(argv[i]) << endl;
+//            std::cerr << parser.getSuggestion(argv[i]) << std::endl;
 //        }
 //    }
 //
@@ -65,7 +65,9 @@ private:
 
     // METHODS
     ActionIfs* find(const char* optp);
-    template <class ACT, class ARG> ActionIfs& add(const string& opt, ARG arg);
+    template <class ACT, class ARG>
+    ActionIfs& add(const string& opt, ARG arg);
+    static bool hasPrefixFNo(const char* strp);  // Returns true if strp starts with "-fno"
     static bool hasPrefixNo(const char* strp);  // Returns true if strp starts with "-no"
 
 public:
@@ -87,7 +89,8 @@ class V3OptionParser::ActionIfs VL_NOT_FINAL {
 public:
     virtual ~ActionIfs() = default;
     virtual bool isValueNeeded() const = 0;  // Need val of "-opt val"
-    virtual bool isOnOffAllowed() const = 0;  // true if "-no-opt" is allowd
+    virtual bool isFOnOffAllowed() const = 0;  // true if "-fno-opt" is allowed
+    virtual bool isOnOffAllowed() const = 0;  // true if "-no-opt" is allowed
     virtual bool isPartialMatchAllowed() const = 0;  // true if "-Wno-" matches "-Wno-fatal"
     virtual bool isUndocumented() const = 0;  // Will not be suggested in typo
     // Set a value or run callback
@@ -101,17 +104,20 @@ class V3OptionParser::AppendHelper final {
 public:
     // TYPES
     // Tag to specify which operator() to call
-    struct Set {};  // For ActionSet
+    struct FOnOff {};  // For ActionFOnOff
     struct OnOff {};  // For ActionOnOff
+    struct Set {};  // For ActionSet
+
     struct CbCall {};  // For ActionCbCall
-    struct CbOnOff {};  // For ActionOnOff
-    struct CbVal {};  // For ActionCbVal
+    struct CbFOnOff {};  // For ActionCbFOnOff
+    struct CbOnOff {};  // For ActionCbOnOff
     struct CbPartialMatch {};  // For ActionCbPartialMatch
     struct CbPartialMatchVal {};  // For ActionCbPartialMatchVal
+    struct CbVal {};  // For ActionCbVal
 
 private:
     // MEMBERS
-    V3OptionParser& m_parser;  // The actual option registory
+    V3OptionParser& m_parser;  // The actual option registry
 
 public:
     // METHODS
@@ -122,12 +128,14 @@ public:
     ActionIfs& operator()(const char* optp, Set, int*) const;
     ActionIfs& operator()(const char* optp, Set, string*) const;
 
+    ActionIfs& operator()(const char* optp, FOnOff, bool*) const;
     ActionIfs& operator()(const char* optp, OnOff, bool*) const;
 #ifndef V3OPTION_PARSER_NO_VOPTION_BOOL
     ActionIfs& operator()(const char* optp, OnOff, VOptionBool*) const;
 #endif
 
     ActionIfs& operator()(const char* optp, CbCall, std::function<void(void)>) const;
+    ActionIfs& operator()(const char* optp, CbFOnOff, std::function<void(bool)>) const;
     ActionIfs& operator()(const char* optp, CbOnOff, std::function<void(bool)>) const;
     ActionIfs& operator()(const char* optp, CbVal, std::function<void(int)>) const;
     ActionIfs& operator()(const char* optp, CbVal, std::function<void(const char*)>) const;
@@ -144,13 +152,15 @@ public:
 
 #define V3OPTION_PARSER_DECL_TAGS \
     const auto Set VL_ATTR_UNUSED = V3OptionParser::AppendHelper::Set{}; \
+    const auto FOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::FOnOff{}; \
     const auto OnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::OnOff{}; \
     const auto CbCall VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbCall{}; \
+    const auto CbFOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbFOnOff{}; \
     const auto CbOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbOnOff{}; \
-    const auto CbVal VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbVal{}; \
     const auto CbPartialMatch VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbPartialMatch{}; \
     const auto CbPartialMatchVal VL_ATTR_UNUSED \
-        = V3OptionParser::AppendHelper::CbPartialMatchVal {}
+        = V3OptionParser::AppendHelper::CbPartialMatchVal{}; \
+    const auto CbVal VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbVal{};
 
 //######################################################################
 

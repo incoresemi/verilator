@@ -1,12 +1,16 @@
 .. Github doesn't render images unless absolute URL
 .. Do not know of a conditional tag, "only: github" nor "github display" works
 
+.. image:: https://img.shields.io/badge/Website-Verilator.org-181717.svg
+    :target: https://verilator.org
 .. image:: https://img.shields.io/badge/License-LGPL%20v3-blue.svg
-    :target: https://www.gnu.org/licenses/lgpl-3.0]
+    :target: https://www.gnu.org/licenses/lgpl-3.0
 .. image:: https://img.shields.io/badge/License-Artistic%202.0-0298c3.svg
     :target: https://opensource.org/licenses/Artistic-2.0
 .. image:: https://repology.org/badge/tiny-repos/verilator.svg?header=distro%20packages
     :target: https://repology.org/project/verilator/versions
+.. image:: https://img.shields.io/docker/pulls/verilator/verilator
+    :target: https://hub.docker.com/r/verilator/verilator
 .. image:: https://api.codacy.com/project/badge/Grade/fa78caa433c84a4ab9049c43e9debc6f
     :target: https://www.codacy.com/gh/verilator/verilator
 .. image:: https://codecov.io/gh/verilator/verilator/branch/master/graph/badge.svg
@@ -28,11 +32,11 @@ Welcome to Verilator
      - |Logo|
    * - |verilator multithreaded performance|
      - **Fast**
-        * Outperforms many commercial simulators
-        * Single- and multi-threaded output models
+        * Outperforms many closed-source commercial simulators
+        * Single- and multithreaded output models
    * - **Widely Used**
         * Wide industry and academic deployment
-        * Out-of-the-box support from Arm, and RISC-V vendor IP
+        * Out-of-the-box support from Arm and RISC-V vendor IP
      - |verilator usage|
    * - |verilator community|
      - **Community Driven & Openly Licensed**
@@ -52,23 +56,21 @@ What Verilator Does
 Verilator is invoked with parameters similar to GCC or Synopsys's VCS.  It
 "Verilates" the specified Verilog or SystemVerilog code by reading it,
 performing lint checks, and optionally inserting assertion checks and
-coverage-analysis points. It outputs single- or multi-threaded .cpp and .h
+coverage-analysis points. It outputs single- or multithreaded .cpp and .h
 files, the "Verilated" code.
 
-The user writes a little C++/SystemC wrapper file, which instantiates the
-"Verilated" model of the user's top level module. These C++/SystemC files
-are then compiled by a C++ compiler (gcc/clang/MSVC++). Executing the
-resulting executable performs the design simulation. Verilator also
-supports linking Verilated generated libraries, optionally encrypted, into
-other simulators.
+These Verilated C++/SystemC files are then compiled by a C++ compiler
+(gcc/clang/MSVC++), optionally along with a user's own C++/SystemC wrapper
+file, to instantiate the Verilated model. Executing the resulting
+executable performs the design simulation. Verilator also supports linking
+Verilated generated libraries, optionally encrypted, into other simulators.
 
-Verilator may not be the best choice if you are expecting a full featured
-replacement for Incisive, ModelSim/Questa, VCS or another commercial
-Verilog simulator, or if you are looking for a behavioral Verilog simulator
-e.g. for a quick class project (we recommend `Icarus Verilog`_ for this.)
-However, if you are looking for a path to migrate SystemVerilog to C++ or
-SystemC, or your team is comfortable writing just a touch of C++ code,
-Verilator is the tool for you.
+Verilator may not be the best choice if you are expecting a full-featured
+replacement for a closed-source Verilog simulator, needs SDF annotation,
+mixed-signal simulation, or are doing a quick class project (we recommend
+`Icarus Verilog`_ for classwork.)  However, if you are looking for a path
+to migrate SystemVerilog to C++/SystemC, or want high-speed simulation of
+designs, Verilator is the tool for you.
 
 
 Performance
@@ -84,10 +86,12 @@ as `Icarus Verilog`_. Another 2-10x speedup might be gained from
 multithreading (yielding 200-1000x total over interpreted simulators).
 
 Verilator has typically similar or better performance versus the
-closed-source Verilog simulators (Carbon Design Systems Carbonator,
-Modelsim, Cadence Incisive/NC-Verilog, Synopsys VCS, VTOC, and Pragmatic
-CVer/CVC). But, Verilator is open-sourced, so you can spend on computes
-rather than licenses. Thus Verilator gives you the best cycles/dollar.
+closed-source Verilog simulators (e.g., Carbon Design Systems Carbonator,
+Modelsim/Questa, Cadence Incisive/NC-Verilog, Synopsys VCS, VTOC, and
+Pragmatic CVer/CVC). But, Verilator is open-sourced, so you can spend on
+computes rather than licenses. Thus, Verilator gives you the best
+simulation cycles/dollar.
+
 
 Installation & Documentation
 ============================
@@ -100,7 +104,7 @@ For more information:
 - `Verilator manual (HTML) <https://verilator.org/verilator_doc.html>`_,
   or `Verilator manual (PDF) <https://verilator.org/verilator_doc.pdf>`_
 
-- `Subscribe to verilator announcements
+- `Subscribe to Verilator announcements
   <https://github.com/verilator/verilator-announce>`_
 
 - `Verilator forum <https://verilator.org/forum>`_
@@ -131,14 +135,14 @@ Related Projects
 - `GTKwave <http://gtkwave.sourceforge.net/>`_ - Waveform viewer for
   Verilator traces.
 
-- `Icarus Verilog`_ - Icarus is a full featured interpreted Verilog
+- `Icarus Verilog`_ - Icarus is a full-featured interpreted Verilog
   simulator. If Verilator does not support your needs, perhaps Icarus may.
 
 
 Open License
 ============
 
-Verilator is Copyright 2003-2022 by Wilson Snyder. (Report bugs to
+Verilator is Copyright 2003-2023 by Wilson Snyder. (Report bugs to
 `Verilator Issues <https://verilator.org/issues>`_.)
 
 Verilator is free software; you can redistribute it and/or modify it under

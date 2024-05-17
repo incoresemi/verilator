@@ -11,11 +11,11 @@ if (!$::Driver) { use FindBin; exec("$FindBin::Bin/bootstrap.pl", @ARGV, $0); di
 scenarios(vlt => 1);
 
 compile(
-    verilator_flags2 => ['--stats', "-Ow"],
+    verilator_flags2 => ['--stats', "-fno-merge-cond"],
     );
 
 if ($Self->{vlt_all}) {
-    file_grep($Self->{stats}, qr/Node count, IF  +\d+ +\d+ +\d+ +\d+ +(\d+)/, 11);
+    file_grep($Self->{stats}, qr/Node count, IF  +\d+ +\d+ +\d+ +\d+ +(\d+)/, 28);
 }
 
 ok(1);

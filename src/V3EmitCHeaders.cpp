@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -17,19 +17,24 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
-#include "V3Global.h"
+#include "V3Ast.h"
 #include "V3EmitC.h"
 #include "V3EmitCConstInit.h"
+#include "V3Global.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <set>
+#include <string>
 #include <vector>
+
+VL_DEFINE_DEBUG_FUNCTIONS;
 
 //######################################################################
 // Internal EmitC implementation
 
 class EmitCHeader final : public EmitCConstInit {
     // METHODS
-    VL_DEBUG_FUNC;  // Declare debug()
 
     void decorateFirst(bool& first, const string& str) {
         if (first) {
@@ -116,7 +121,12 @@ class EmitCHeader final : public EmitCConstInit {
         emitCurrentList();
     }
     void emitInternalVarDecls(const AstNodeModule* modp) {
-        if (!VN_IS(modp, Class)) {
+        if (const AstClass* const classp = VN_CAST(modp, Class)) {
+            if (classp->needRNG()) {
+                putsDecoration("\n// INTERNAL VARIABLES\n");
+                puts("VlRNG __Vm_rng;\n");
+            }
+        } else {  // not class
             putsDecoration("\n// INTERNAL VARIABLES\n");
             puts(symClassName() + "* const vlSymsp;\n");
         }
@@ -135,7 +145,7 @@ class EmitCHeader final : public EmitCConstInit {
                     puts(varp->dtypep()->cType(varp->nameProtect(), false, false));
                     if (canBeConstexpr) {
                         puts(" = ");
-                        iterate(varp->valuep());
+                        iterateConst(varp->valuep());
                     }
                     puts(";\n");
                 }
@@ -146,7 +156,7 @@ class EmitCHeader final : public EmitCConstInit {
         if (!VN_IS(modp, Class)) {  // Classes use CFuncs with isConstructor/isDestructor
             const string& name = prefixNameProtect(modp);
             putsDecoration("\n// CONSTRUCTORS\n");
-            puts(name + "(" + symClassName() + "* symsp, const char* name);\n");
+            puts(name + "(" + symClassName() + "* symsp, const char* v__name);\n");
             puts("~" + name + "();\n");
             puts("VL_UNCOPYABLE(" + name + ");\n");
         }
@@ -160,7 +170,7 @@ class EmitCHeader final : public EmitCConstInit {
             puts("void " + protect("__Vconfigure") + "(bool first);\n");
         }
 
-        if (v3Global.opt.coverage()) {
+        if (v3Global.opt.coverage() && !VN_IS(modp, Class)) {
             decorateFirst(first, section);
             puts("void __vlCoverInsert(");
             puts(v3Global.opt.threads() ? "std::atomic<uint32_t>" : "uint32_t");
@@ -199,12 +209,65 @@ class EmitCHeader final : public EmitCConstInit {
                     }
                     puts(itemp->nameProtect());
                     puts(" = ");
-                    iterate(itemp->valuep());
+                    iterateConst(itemp->valuep());
                     if (VN_IS(itemp->nextp(), EnumItem)) puts(",");
                     puts("\n");
                 }
                 puts("};\n");
             }
+        }
+    }
+    void emitStructDecl(const AstNodeModule* modp, AstNodeUOrStructDType* sdtypep,
+                        std::set<AstNodeUOrStructDType*>& emitted) {
+        if (emitted.count(sdtypep) > 0) return;
+        emitted.insert(sdtypep);
+        for (const AstMemberDType* itemp = sdtypep->membersp(); itemp;
+             itemp = VN_AS(itemp->nextp(), MemberDType)) {
+            AstNodeUOrStructDType* const subp = itemp->getChildStructp();
+            if (subp && !subp->packed()) {
+                // Recurse if it belongs to the current module
+                if (subp->classOrPackagep() == modp) {
+                    emitStructDecl(modp, subp, emitted);
+                    puts("\n");
+                }
+            }
+        }
+        puts(sdtypep->verilogKwd());  // "struct"/"union"
+        puts(" " + EmitCBase::prefixNameProtect(sdtypep) + " {\n");
+        for (const AstMemberDType* itemp = sdtypep->membersp(); itemp;
+             itemp = VN_AS(itemp->nextp(), MemberDType)) {
+            puts(itemp->dtypep()->cType(itemp->nameProtect(), false, false));
+            puts(";\n");
+        }
+
+        puts("\nbool operator==(const " + EmitCBase::prefixNameProtect(sdtypep)
+             + "& rhs) const {\n");
+        puts("return ");
+        for (const AstMemberDType* itemp = sdtypep->membersp(); itemp;
+             itemp = VN_AS(itemp->nextp(), MemberDType)) {
+            if (itemp != sdtypep->membersp()) puts("\n    && ");
+            puts(itemp->nameProtect() + " == " + "rhs." + itemp->nameProtect());
+        }
+        puts(";\n");
+        puts("}\n");
+        puts("bool operator!=(const " + EmitCBase::prefixNameProtect(sdtypep)
+             + "& rhs) const {\n");
+        puts("return !(*this == rhs);\n}\n");
+        puts("};\n");
+    }
+    void emitStructs(const AstNodeModule* modp) {
+        bool first = true;
+        // Track structs that've been emitted already
+        std::set<AstNodeUOrStructDType*> emitted;
+        for (const AstNode* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
+            const AstTypedef* const tdefp = VN_CAST(nodep, Typedef);
+            if (!tdefp) continue;
+            AstNodeUOrStructDType* const sdtypep
+                = VN_CAST(tdefp->dtypep()->skipRefToEnump(), NodeUOrStructDType);
+            if (!sdtypep) continue;
+            if (sdtypep->packed()) continue;
+            decorateFirst(first, "\n// UNPACKED STRUCT TYPES\n");
+            emitStructDecl(modp, sdtypep, emitted);
         }
     }
     void emitFuncDecls(const AstNodeModule* modp, bool inClassBody) {
@@ -236,30 +299,34 @@ class EmitCHeader final : public EmitCConstInit {
     void emitAll(const AstNodeModule* modp) {
         // Include files required by this AstNodeModule
         if (const AstClass* const classp = VN_CAST(modp, Class)) {
-            if (classp->extendsp())
+            if (classp->extendsp()) {
                 puts("#include \""
                      + prefixNameProtect(classp->extendsp()->classp()->classOrPackagep())
                      + ".h\"\n");
+            }
         }
-        emitModCUse(modp, VUseType::INT_INCLUDE);
 
         // Forward declarations required by this AstNodeModule
         puts("\nclass " + symClassName() + ";\n");
-        emitModCUse(modp, VUseType::INT_FWD_CLASS);
 
         // From `systemc_header
         emitTextSection(modp, VNType::atScHdr);
 
+        emitStructs(modp);
+
         // Open class body {{{
+        puts("\nclass ");
+        if (!VN_IS(modp, Class)) puts("alignas(VL_CACHE_LINE_BYTES) ");
+        puts(prefixNameProtect(modp));
         if (const AstClass* const classp = VN_CAST(modp, Class)) {
-            puts("class ");
-            puts(prefixNameProtect(modp));
+            puts(" : public ");
             if (classp->extendsp()) {
-                puts(" : public ");
                 puts(prefixNameProtect(classp->extendsp()->classp()));
+            } else {
+                puts("VlClass");
             }
         } else {
-            puts("VL_MODULE(" + prefixNameProtect(modp) + ")");
+            puts(" final : public VerilatedModule");
         }
         puts(" {\n");
         ofp()->resetPrivate();
@@ -279,11 +346,7 @@ class EmitCHeader final : public EmitCConstInit {
         emitTextSection(modp, VNType::atScInt);
 
         // Close class body
-        if (!VN_IS(modp, Class)) {
-            puts("} VL_ATTR_ALIGNED(VL_CACHE_LINE_BYTES);\n");
-        } else {
-            puts("};\n");
-        }
+        puts("};\n");
         // }}}
 
         // Emit out of class function declarations
@@ -297,7 +360,7 @@ class EmitCHeader final : public EmitCConstInit {
         // Open output file
         const string filename = v3Global.opt.makeDir() + "/" + prefixNameProtect(modp) + ".h";
         newCFile(filename, /* slow: */ false, /* source: */ false);
-        m_ofp = v3Global.opt.systemC() ? new V3OutScFile(filename) : new V3OutCFile(filename);
+        m_ofp = v3Global.opt.systemC() ? new V3OutScFile{filename} : new V3OutCFile{filename};
 
         ofp()->putsHeader();
         puts("// DESCRIPTION: Verilator output: Design internal header\n");
@@ -312,6 +375,20 @@ class EmitCHeader final : public EmitCConstInit {
         if (v3Global.opt.mtasks()) puts("#include \"verilated_threads.h\"\n");
         if (v3Global.opt.savable()) puts("#include \"verilated_save.h\"\n");
         if (v3Global.opt.coverage()) puts("#include \"verilated_cov.h\"\n");
+        if (v3Global.usesTiming()) puts("#include \"verilated_timing.h\"\n");
+
+        std::set<string> cuse_set;
+        auto add_to_cuse_set = [&](string s) { cuse_set.insert(s); };
+
+        forModCUse(modp, VUseType::INT_INCLUDE, add_to_cuse_set);
+        forModCUse(modp, VUseType::INT_FWD_CLASS, add_to_cuse_set);
+        if (const AstClassPackage* const packagep = VN_CAST(modp, ClassPackage)) {
+            forModCUse(packagep->classp(), VUseType::INT_INCLUDE, add_to_cuse_set);
+            forModCUse(packagep->classp(), VUseType::INT_FWD_CLASS, add_to_cuse_set);
+        }
+
+        for (const string& s : cuse_set) puts(s);
+        puts("\n");
 
         emitAll(modp);
 
@@ -325,10 +402,10 @@ class EmitCHeader final : public EmitCConstInit {
         // Close output file
         VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
     }
-    virtual ~EmitCHeader() override = default;
+    ~EmitCHeader() override = default;
 
 public:
-    static void main(const AstNodeModule* modp) { EmitCHeader emitCHeader(modp); }
+    static void main(const AstNodeModule* modp) { EmitCHeader emitCHeader{modp}; }
 };
 
 //######################################################################

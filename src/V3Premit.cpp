@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -27,13 +27,16 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
-#include "V3Global.h"
 #include "V3Premit.h"
+
 #include "V3Ast.h"
+#include "V3Global.h"
 #include "V3Stats.h"
 #include "V3UniqueNames.h"
 
 #include <algorithm>
+
+VL_DEFINE_DEBUG_FUNCTIONS;
 
 constexpr int STATIC_CONST_MIN_WIDTH = 256;  // Minimum size to extract to static constant
 
@@ -43,31 +46,31 @@ constexpr int STATIC_CONST_MIN_WIDTH = 256;  // Minimum size to extract to stati
 class PremitVisitor final : public VNVisitor {
 private:
     // NODE STATE
-    //  AstNodeMath::user()     -> bool.  True if iterated already
+    //  AstNodeExpr::user()     -> bool.  True if iterated already
     //  AstShiftL::user2()      -> bool.  True if converted to conditional
     //  AstShiftR::user2()      -> bool.  True if converted to conditional
     //  *::user3()              -> Used when visiting AstNodeAssign
     const VNUser1InUse m_inuser1;
     const VNUser2InUse m_inuser2;
 
-    // STATE
+    // STATE - across all visitors
+    V3UniqueNames m_tempNames;  // For generating unique temporary variable names
+    VDouble0 m_extractedToConstPool;  // Statistic tracking
+
+    // STATE - for current visit position (use VL_RESTORER)
     AstCFunc* m_cfuncp = nullptr;  // Current block
     AstNode* m_stmtp = nullptr;  // Current statement
+    AstCCall* m_callp = nullptr;  // Current AstCCall
     AstWhile* m_inWhilep = nullptr;  // Inside while loop, special statement additions
     AstTraceInc* m_inTracep = nullptr;  // Inside while loop, special statement additions
     bool m_assignLhs = false;  // Inside assignment lhs, don't breakup extracts
-    V3UniqueNames m_tempNames;  // For generating unique temporary variable names
-
-    VDouble0 m_extractedToConstPool;  // Statistic tracking
 
     // METHODS
-    VL_DEBUG_FUNC;  // Declare debug()
-
     bool assignNoTemp(AstNodeAssign* nodep) {
         return (VN_IS(nodep->lhsp(), VarRef) && !AstVar::scVarRecurse(nodep->lhsp())
                 && VN_IS(nodep->rhsp(), Const));
     }
-    void checkNode(AstNode* nodep) {
+    void checkNode(AstNodeExpr* nodep) {
         // Consider adding a temp for this expression.
         // We need to avoid adding temps to the following:
         //   ASSIGN(x, *here*)
@@ -88,8 +91,7 @@ private:
                            && VN_AS(nodep->backp(), Sel)->widthp() == nodep) {
                     // AstSel::width must remain a constant
                 } else if ((nodep->firstAbovep() && VN_IS(nodep->firstAbovep(), ArraySel))
-                           || ((VN_IS(m_stmtp, CCall) || VN_IS(m_stmtp, CStmt))
-                               && VN_IS(nodep, ArraySel))) {
+                           || ((m_callp || VN_IS(m_stmtp, CStmt)) && VN_IS(nodep, ArraySel))) {
                     // ArraySel's are pointer refs, ignore
                 } else {
                     UINFO(4, "Cre Temp: " << nodep << endl);
@@ -109,16 +111,13 @@ private:
         } else if (m_inTracep) {
             m_inTracep->addPrecondsp(newp);
         } else if (m_stmtp) {
-            VNRelinker linker;
-            m_stmtp->unlinkFrBack(&linker);
-            newp->addNext(m_stmtp);
-            linker.relink(newp);
+            m_stmtp->addHereThisAsNext(newp);
         } else {
             newp->v3fatalSrc("No statement insertion point.");
         }
     }
 
-    void createDeepTemp(AstNode* nodep, bool noSubst) {
+    void createDeepTemp(AstNodeExpr* nodep, bool noSubst) {
         if (nodep->user1SetOnce()) return;  // Only add another assignment for this node
 
         VNRelinker relinker;
@@ -133,65 +132,73 @@ private:
                                   && !constp->num().isString();  // Not a string
         if (useConstPool) {
             // Extract into constant pool.
-            const bool merge = v3Global.opt.mergeConstPool();
+            const bool merge = v3Global.opt.fMergeConstPool();
             varp = v3Global.rootp()->constPoolp()->findConst(constp, merge)->varp();
             nodep->deleteTree();
             ++m_extractedToConstPool;
         } else {
             // Keep as local temporary. Name based on hash of node for output stability.
-            varp = new AstVar(fl, VVarType::STMTTEMP, m_tempNames.get(nodep), nodep->dtypep());
+            varp = new AstVar{fl, VVarType::STMTTEMP, m_tempNames.get(nodep), nodep->dtypep()};
             m_cfuncp->addInitsp(varp);
             // Put assignment before the referencing statement
-            insertBeforeStmt(new AstAssign(fl, new AstVarRef(fl, varp, VAccess::WRITE), nodep));
+            insertBeforeStmt(new AstAssign{fl, new AstVarRef{fl, varp, VAccess::WRITE}, nodep});
         }
 
         // Do not remove VarRefs to this in V3Const
         if (noSubst) varp->noSubst(true);
 
         // Replace node with VarRef to new Var
-        relinker.relink(new AstVarRef(fl, varp, VAccess::READ));
+        relinker.relink(new AstVarRef{fl, varp, VAccess::READ});
     }
 
     // VISITORS
-    virtual void visit(AstNodeModule* nodep) override {
+    void visit(AstNodeModule* nodep) override {
         UINFO(4, " MOD   " << nodep << endl);
         iterateChildren(nodep);
     }
-    virtual void visit(AstCFunc* nodep) override {
+    void visit(AstCFunc* nodep) override {
         VL_RESTORER(m_cfuncp);
-        {
-            m_cfuncp = nodep;
-            m_tempNames.reset();
-            iterateChildren(nodep);
-        }
+        m_cfuncp = nodep;
+        m_tempNames.reset();
+        iterateChildren(nodep);
     }
+
+#define RESTORER_START_STATEMENT() \
+    VL_RESTORER(m_assignLhs); \
+    VL_RESTORER(m_stmtp);
+
+    // Must use RESTORER_START_STATEMENT() in visitors using this
     void startStatement(AstNode* nodep) {
         m_assignLhs = false;
         if (m_cfuncp) m_stmtp = nodep;
     }
-    virtual void visit(AstWhile* nodep) override {
+
+    void visit(AstWhile* nodep) override {
         UINFO(4, "  WHILE  " << nodep << endl);
+        RESTORER_START_STATEMENT();
         startStatement(nodep);
         iterateAndNextNull(nodep->precondsp());
         startStatement(nodep);
-        m_inWhilep = nodep;
-        iterateAndNextNull(nodep->condp());
-        m_inWhilep = nullptr;
+        {
+            VL_RESTORER(m_inWhilep);
+            m_inWhilep = nodep;
+            iterateAndNextNull(nodep->condp());
+        }
         startStatement(nodep);
-        iterateAndNextNull(nodep->bodysp());
+        iterateAndNextNull(nodep->stmtsp());
         iterateAndNextNull(nodep->incsp());
-        m_stmtp = nullptr;
     }
-    virtual void visit(AstNodeAssign* nodep) override {
+    void visit(AstNodeAssign* nodep) override {
+        RESTORER_START_STATEMENT();
         startStatement(nodep);
         {
             bool noopt = false;
             {
                 const VNUser3InUse user3InUse;
-                nodep->lhsp()->foreach<AstVarRef>([](const AstVarRef* refp) {
+                nodep->lhsp()->foreach([](const AstVarRef* refp) {
                     if (refp->access().isWriteOrRW()) refp->varp()->user3(true);
                 });
-                nodep->rhsp()->foreach<AstVarRef>([&noopt](const AstVarRef* refp) {
+                nodep->rhsp()->foreach([&noopt](const AstVarRef* refp) {
                     if (refp->access().isReadOnly() && refp->varp()->user3()) noopt = true;
                 });
             }
@@ -204,27 +211,24 @@ private:
             }
         }
         iterateAndNextNull(nodep->rhsp());
-        m_assignLhs = true;
-        iterateAndNextNull(nodep->lhsp());
-        m_assignLhs = false;
-        m_stmtp = nullptr;
-    }
-    virtual void visit(AstNodeStmt* nodep) override {
-        if (!nodep->isStatement()) {
-            iterateChildren(nodep);
-            return;
+        {
+            VL_RESTORER(m_assignLhs);
+            m_assignLhs = true;
+            iterateAndNextNull(nodep->lhsp());
         }
+    }
+    void visit(AstNodeStmt* nodep) override {
         UINFO(4, "  STMT  " << nodep << endl);
+        RESTORER_START_STATEMENT();
         startStatement(nodep);
         iterateChildren(nodep);
-        m_stmtp = nullptr;
     }
-    virtual void visit(AstTraceInc* nodep) override {
+    void visit(AstTraceInc* nodep) override {
+        RESTORER_START_STATEMENT();
         startStatement(nodep);
+        VL_RESTORER(m_inTracep);
         m_inTracep = nodep;
         iterateChildren(nodep);
-        m_inTracep = nullptr;
-        m_stmtp = nullptr;
     }
     void visitShift(AstNodeBiop* nodep) {
         // Shifts of > 32/64 bits in C++ will wrap-around and generate non-0s
@@ -242,62 +246,66 @@ private:
                 && nodep->width() < (1LL << nodep->rhsp()->widthMin())) {
                 VNRelinker replaceHandle;
                 nodep->unlinkFrBack(&replaceHandle);
-                AstNode* constzerop;
+                AstNodeExpr* constzerop;
                 const int m1value
                     = nodep->widthMin() - 1;  // Constant of width-1; not changing dtype width
                 if (nodep->signedFlavor()) {
                     // Then over shifting gives the sign bit, not all zeros
                     // Note *NOT* clean output -- just like normal shift!
                     // Create equivalent of VL_SIGNONES_(node_width)
-                    constzerop = new AstNegate(
+                    constzerop = new AstNegate{
                         nodep->fileline(),
-                        new AstShiftR(nodep->fileline(), nodep->lhsp()->cloneTree(false),
-                                      new AstConst(nodep->fileline(), m1value), nodep->width()));
+                        new AstShiftR{nodep->fileline(), nodep->lhsp()->cloneTree(false),
+                                      new AstConst(nodep->fileline(), m1value), nodep->width()}};
                 } else {
-                    constzerop = new AstConst(nodep->fileline(), AstConst::WidthedValue(),
-                                              nodep->width(), 0);
+                    constzerop = new AstConst{nodep->fileline(), AstConst::WidthedValue{},
+                                              nodep->width(), 0};
                 }
                 constzerop->dtypeFrom(nodep);  // unsigned
 
-                AstNode* const constwidthp
-                    = new AstConst(nodep->fileline(), AstConst::WidthedValue(),
+                AstNodeExpr* const constwidthp
+                    = new AstConst(nodep->fileline(), AstConst::WidthedValue{},
                                    nodep->rhsp()->widthMin(), m1value);
                 constwidthp->dtypeFrom(nodep->rhsp());  // unsigned
-                AstCond* const newp = new AstCond(
+                AstCond* const newp = new AstCond{
                     nodep->fileline(),
-                    new AstGte(nodep->fileline(), constwidthp, nodep->rhsp()->cloneTree(false)),
-                    nodep, constzerop);
+                    new AstGte{nodep->fileline(), constwidthp, nodep->rhsp()->cloneTree(false)},
+                    nodep, constzerop};
                 replaceHandle.relink(newp);
             }
         }
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstShiftL* nodep) override { visitShift(nodep); }
-    virtual void visit(AstShiftR* nodep) override { visitShift(nodep); }
-    virtual void visit(AstShiftRS* nodep) override { visitShift(nodep); }
+    void visit(AstShiftL* nodep) override { visitShift(nodep); }
+    void visit(AstShiftR* nodep) override { visitShift(nodep); }
+    void visit(AstShiftRS* nodep) override { visitShift(nodep); }
     // Operators
-    virtual void visit(AstNodeTermop* nodep) override {
+    void visit(AstNodeTermop* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstNodeUniop* nodep) override {
+    void visit(AstNodeUniop* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstNodeBiop* nodep) override {
+    void visit(AstNodeBiop* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstRand* nodep) override {
+    void visit(AstRand* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstUCFunc* nodep) override {
+    void visit(AstRandRNG* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstSel* nodep) override {
+    void visit(AstUCFunc* nodep) override {
+        iterateChildren(nodep);
+        checkNode(nodep);
+    }
+    void visit(AstSel* nodep) override {
         iterateAndNextNull(nodep->fromp());
         {  // Only the 'from' is part of the assignment LHS
             VL_RESTORER(m_assignLhs);
@@ -307,7 +315,7 @@ private:
         }
         checkNode(nodep);
     }
-    virtual void visit(AstArraySel* nodep) override {
+    void visit(AstArraySel* nodep) override {
         iterateAndNextNull(nodep->fromp());
         {  // Only the 'from' is part of the assignment LHS
             VL_RESTORER(m_assignLhs);
@@ -316,7 +324,7 @@ private:
         }
         checkNode(nodep);
     }
-    virtual void visit(AstAssocSel* nodep) override {
+    void visit(AstAssocSel* nodep) override {
         iterateAndNextNull(nodep->fromp());
         {  // Only the 'from' is part of the assignment LHS
             VL_RESTORER(m_assignLhs);
@@ -325,13 +333,13 @@ private:
         }
         checkNode(nodep);
     }
-    virtual void visit(AstConst* nodep) override {
+    void visit(AstConst* nodep) override {
         iterateChildren(nodep);
         checkNode(nodep);
     }
-    virtual void visit(AstNodeCond* nodep) override {
+    void visit(AstNodeCond* nodep) override {
         iterateChildren(nodep);
-        if (nodep->expr1p()->isWide() && !VN_IS(nodep->condp(), Const)
+        if (nodep->thenp()->isWide() && !VN_IS(nodep->condp(), Const)
             && !VN_IS(nodep->condp(), VarRef)) {
             // We're going to need the expression several times in the expanded code,
             // so might as well make it a common expression
@@ -339,12 +347,17 @@ private:
         }
         checkNode(nodep);
     }
+    void visit(AstCCall* nodep) override {
+        VL_RESTORER(m_callp);
+        m_callp = nodep;
+        iterateChildren(nodep);
+    }
 
     // Autoflush
-    virtual void visit(AstDisplay* nodep) override {
+    void visit(AstDisplay* nodep) override {
+        RESTORER_START_STATEMENT();
         startStatement(nodep);
         iterateChildren(nodep);
-        m_stmtp = nullptr;
         if (v3Global.opt.autoflush()) {
             const AstNode* searchp = nodep->nextp();
             while (searchp && VN_IS(searchp, Comment)) searchp = searchp->nextp();
@@ -353,16 +366,17 @@ private:
                 // There's another display next; we can just wait to flush
             } else {
                 UINFO(4, "Autoflush " << nodep << endl);
-                nodep->addNextHere(new AstFFlush(nodep->fileline(),
-                                                 AstNode::cloneTreeNull(nodep->filep(), true)));
+                nodep->addNextHere(
+                    new AstFFlush{nodep->fileline(),
+                                  VN_AS(AstNode::cloneTreeNull(nodep->filep(), true), NodeExpr)});
             }
         }
     }
-    virtual void visit(AstSFormatF* nodep) override {
+    void visit(AstSFormatF* nodep) override {
         iterateChildren(nodep);
         // Any strings sent to a display must be var of string data type,
         // to avoid passing a pointer to a temporary.
-        for (AstNode* expp = nodep->exprsp(); expp; expp = expp->nextp()) {
+        for (AstNodeExpr* expp = nodep->exprsp(); expp; expp = VN_AS(expp->nextp(), NodeExpr)) {
             if (expp->dtypep()->basicp() && expp->dtypep()->basicp()->isString()
                 && !VN_IS(expp, VarRef)) {
                 createDeepTemp(expp, true);
@@ -372,8 +386,8 @@ private:
 
     //--------------------
     // Default: Just iterate
-    virtual void visit(AstVar*) override {}  // Don't hit varrefs under vars
-    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
+    void visit(AstVar*) override {}  // Don't hit varrefs under vars
+    void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
@@ -381,7 +395,7 @@ public:
         : m_tempNames{"__Vtemp"} {
         iterate(nodep);
     }
-    virtual ~PremitVisitor() {
+    ~PremitVisitor() override {
         V3Stats::addStat("Optimizations, Prelim extracted value to ConstPool",
                          m_extractedToConstPool);
     }
@@ -396,5 +410,5 @@ public:
 void V3Premit::premitAll(AstNetlist* nodep) {
     UINFO(2, __FUNCTION__ << ": " << endl);
     { PremitVisitor{nodep}; }  // Destruct before checking
-    V3Global::dumpCheckGlobalTree("premit", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
+    V3Global::dumpCheckGlobalTree("premit", 0, dumpTreeLevel() >= 3);
 }

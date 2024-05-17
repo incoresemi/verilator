@@ -77,7 +77,6 @@ my $opt_gdbbt;
 my $opt_gdbsim;
 my $opt_hashset;
 my $opt_jobs = 1;
-my $opt_optimize;
 my $opt_quiet;
 my $opt_rerun;
 my $opt_rrsim;
@@ -88,7 +87,6 @@ my $opt_stop;
 my $opt_trace;
 my $opt_verbose;
 my $Opt_Verilated_Debug;
-our $Opt_Unsupported;
 our $Opt_Verilation = 1;
 our @Opt_Driver_Verilator_Flags;
 
@@ -104,7 +102,6 @@ if (! GetOptions(
           "hashset=s"   => \$opt_hashset,
           "help"        => \&usage,
           "j=i"         => \$opt_jobs,
-          "optimize:s"  => \$opt_optimize,
           "quiet!"      => \$opt_quiet,
           "rerun!"      => \$opt_rerun,
           "rr!"         => \$opt_rr,
@@ -113,7 +110,6 @@ if (! GetOptions(
           "site!"       => \$opt_site,
           "stop!"       => \$opt_stop,
           "trace!"      => \$opt_trace,
-          "unsupported!"=> \$Opt_Unsupported,
           "verbose!"    => \$opt_verbose,
           "verilation!"         => \$Opt_Verilation,  # Undocumented debugging
           "verilated-debug!"    => \$Opt_Verilated_Debug,
@@ -157,6 +153,9 @@ if ($#opt_tests < 0) {  # Run everything
 @opt_tests = _calc_hashset(@opt_tests) if $opt_hashset;
 
 if ($#opt_tests >= 2 && $opt_jobs >= 2) {
+    # Read supported into master process, so don't call every subprocess
+    _have_coroutines();
+    _have_sc();
     # Without this tests such as t_debug_sigsegv_bt_bad.pl will occasionally
     # block on input and cause a SIGSTOP, then a "fg" was needed to resume testing.
     if (!$::Have_Forker) {
@@ -199,13 +198,13 @@ if ($opt_rerun && $runner->fail_count) {
         quiet => 0,
         fail1_cnt => $orig_runner->fail_count,
         ok_cnt => $orig_runner->{ok_cnt},
-        skip_cnt => $orig_runner->{skip_cnt},
-        unsup_cnt => $orig_runner->{unsup_cnt});
+        skip_cnt => $orig_runner->{skip_cnt});
     foreach my $test (@{$orig_runner->{fail_tests}}) {
-        $test->clean;
         # Reschedule test
+        $test->clean if $test->rerunnable;
         $runner->one_test(pl_filename => $test->{pl_filename},
-                          $test->{scenario} => 1);
+                          $test->{scenario} => 1,
+                          rerun_skipping => !$test->rerunnable);
     }
     $runner->wait_and_report;
 }
@@ -237,7 +236,7 @@ sub parameter {
     elsif ($param =~ /\.pl/) {
         push @opt_tests, $param;
     }
-    elsif ($param =~ /^-?(-debugi|-dump-treei)/) {
+    elsif ($param =~ /^-?(-debugi|-dumpi)/) {
         push @Opt_Driver_Verilator_Flags, $param;
         $_Parameter_Next_Level = $param;
     }
@@ -294,6 +293,35 @@ sub _calc_hashset {
 }
 
 #######################################################################
+# Verilator utilities
+
+our %_Verilator_Supported;
+sub _verilator_get_supported {
+    my $feature = shift;
+    # Returns if given feature is supported
+    if (!defined $_Verilator_Supported{$feature}) {
+        my @args = ("perl", "$ENV{VERILATOR_ROOT}/bin/verilator", "-get-supported", $feature);
+        my $args = join(' ', @args);
+        my $out = `$args`;
+        $out or die "couldn't run: $! " . join(' ', @args);
+        chomp $out;
+        $_Verilator_Supported{$feature} = ($out =~ /1/ ? 1 : 0);
+    }
+    return $_Verilator_Supported{$feature};
+}
+
+sub _have_coroutines {
+    return 1 if _verilator_get_supported('COROUTINES');
+    return 0;
+}
+
+sub _have_sc {
+    return 1 if (defined $ENV{SYSTEMC} || defined $ENV{SYSTEMC_INCLUDE} || $ENV{CFG_HAVE_SYSTEMC});
+    return 1 if _verilator_get_supported('SYSTEMC');
+    return 0;
+}
+
+#######################################################################
 #######################################################################
 #######################################################################
 #######################################################################
@@ -315,7 +343,6 @@ sub new {
         fail1_cnt => 0,
         fail_cnt => 0,
         skip_cnt => 0,
-        unsup_cnt => 0,
         skip_msgs => [],
         fail_msgs => [],
         fail_tests => [],
@@ -356,9 +383,15 @@ sub one_test {
              my $test = VTest->new(@params,
                                    running_id => $process->{running_id});
              $test->oprint("=" x 50, "\n");
-             unlink $test->{status_filename};
+             unlink $test->{status_filename} if !$params{rerun_skipping};
              $test->_prep;
-             $test->_read;
+             if ($params{rerun_skipping}) {
+                 print "  ---------- Earlier logfiles below; test was rerunnable = 0\n";
+                 system("cat $test->{obj_dir}/*.log");
+                 print "  ---------- Earlier logfiles above; test was rerunnable = 0\n";
+             } else {
+                 $test->_read;
+             }
              # Don't put anything other than _exit after _read,
              # as may call _exit via another path
              $test->_exit;
@@ -376,8 +409,6 @@ sub one_test {
                  push @{$self->{skip_msgs}},
                      ("\t#" . $test->soprint("-Skip:  $test->{skips}\n"));
                  $self->{skip_cnt}++;
-             } elsif ($test->unsupporteds && !$test->errors) {
-                 $self->{unsup_cnt}++;
              } else {
                  $test->oprint("FAILED: $test->{errors}\n");
                  my $j = ($opt_jobs > 1 ? " -j" : "");
@@ -487,7 +518,6 @@ sub sprint_summary {
     $out .= "  Failed $self->{fail_cnt}";
     $out .= "  Failed-First $self->{fail1_cnt}" if $self->{fail1_cnt};
     $out .= "  Skipped $self->{skip_cnt}" if $self->{skip_cnt};
-    $out .= "  Unsup $self->{unsup_cnt}";
     $out .= sprintf("  Eta %d:%02d", int($eta / 60), $eta % 60) if $self->{left_cnt} > 10 && $eta > 10;
     $out .= sprintf("  Time %d:%02d", int($delta / 60), $delta % 60);
     return $out;
@@ -580,8 +610,11 @@ sub new {
         make_pli => 0,          # need to compile pli
         sc_time_resolution => "SC_PS",  # Keep - PS is SystemC default
         sim_time => 1100,
+        threads => -1,          # --threads (negative means auto based on scenario)
+        context_threads => 0,   # Number of threads to allocate in the context
         benchmark => $opt_benchmark,
         verbose => $opt_verbose,
+        rerunnable => 1,        # Rerun if fails
         run_env => '',
         # All compilers
         v_flags => [split(/\s+/,
@@ -661,7 +694,7 @@ sub new {
         verilator_define => 'VERILATOR',
         verilator_flags => ["-cc",
                             "-Mdir $self->{obj_dir}",
-                            "-OD",  # As currently disabled unless -O3
+                            "--fdedup",  # As currently disabled unless -O3
                             "--debug-check",
                             "--comp-limit-members 10", ],
         verilator_flags2 => [],
@@ -675,12 +708,12 @@ sub new {
 
     $self->{vlt_all} = $self->{vlt} || $self->{vltmt};  # Any Verilator scenario
 
-    $self->{VM_PREFIX} ||= "V" . $self->{name};
+    $self->{vm_prefix} ||= "V" . $self->{name};
     $self->{stats} ||= "$self->{obj_dir}/V" . $self->{name} . "__stats.txt";
     $self->{status_filename} ||= "$self->{obj_dir}/V" . $self->{name} . ".status";
     $self->{run_log_filename} ||= "$self->{obj_dir}/vlt_sim.log";
     $self->{coverage_filename} ||= "$self->{obj_dir}/coverage.dat";
-    $self->{main_filename} ||= "$self->{obj_dir}/$self->{VM_PREFIX}__main.cpp";
+    $self->{main_filename} ||= "$self->{obj_dir}/$self->{vm_prefix}__main.cpp";
     ($self->{top_filename} ||= $self->{pl_filename}) =~ s/\.pl$//;
     ($self->{golden_filename} ||= $self->{pl_filename}) =~ s/\.pl$/.out/;
     if (-e ($self->{top_filename} . ".vhd")) {  # If VHDL file exists
@@ -692,9 +725,10 @@ sub new {
     if (!$self->{make_top_shell}) {
         $self->{top_shell_filename} = $self->{top_filename};
     } else {
-        $self->{top_shell_filename} = "$self->{obj_dir}/$self->{VM_PREFIX}__top.v";
+        $self->{top_shell_filename} = "$self->{obj_dir}/$self->{vm_prefix}__top.v";
     }
     $self->{pli_filename} ||= $self->{name} . ".cpp";
+
     return $self;
 }
 
@@ -751,16 +785,6 @@ sub skip {
     $self->{skips} ||= "Skip: " . $msg;
 }
 
-sub unsupported {
-    my $self = (ref $_[0] ? shift : $Self);
-    my $msg = join('', @_);
-    # Called from tests as: unsupported("Reason message"[, ...]);
-    warn "-Unsupported: $self->{scenario}/$self->{name}: " . $msg . "\n";
-    if (!$::Opt_Unsupported) {
-        $self->{unsupporteds} ||= "Unsupported: " . $msg;
-    }
-}
-
 sub scenarios {
     my $self = (ref $_[0] ? shift : $Self);
     my %params = (@_);
@@ -815,8 +839,6 @@ sub _exit {
         $self->oprint("Self PASSED\n");
     } elsif ($self->skips && !$self->errors) {
         $self->oprint("-Skip: $self->{skips}\n");
-    } elsif ($self->unsupporteds && !$self->errors) {
-        $self->oprint("%Unsupported: $self->{unsupporteds}\n");
     } else {
         $self->error("Missing ok\n") if !$self->errors;
         $self->oprint("%Error: $self->{errors}\n");
@@ -882,7 +904,7 @@ sub clean_objs {
 sub compile_vlt_cmd {
     my $self = (ref $_[0] ? shift : $Self);
     my %param = (%{$self}, @_);  # Default arguments are from $self
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
 
     my @vlt_cmd = (
         "perl", "$ENV{VERILATOR_ROOT}/bin/verilator",
@@ -897,22 +919,26 @@ sub compile_vlt_cmd {
 sub compile_vlt_flags {
     my $self = (ref $_[0] ? shift : $Self);
     my %param = (%{$self}, @_);  # Default arguments are from $self
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
 
-    my $checkflags = join(' ', @{$param{v_flags}},
-                          @{$param{v_flags2}},
-                          @{$param{verilator_flags}},
-                          @{$param{verilator_flags2}},
-                          @{$param{verilator_flags3}});
+    my $checkflags = (' '.join(' ',
+                               @{$param{v_flags}},
+                               @{$param{v_flags2}},
+                               @{$param{verilator_flags}},
+                               @{$param{verilator_flags2}},
+                               @{$param{verilator_flags3}})
+                      .' ');
+    die "%Error: specify threads via 'threads =>' argument, not as a command line option" unless ($checkflags !~ /(^|\s)-?-threads\s/);
+    $self->{coverage} = 1 if ($checkflags =~ /-coverage\b/);
+    $self->{savable} = 1 if ($checkflags =~ /-savable\b/);
     $self->{sc} = 1 if ($checkflags =~ /-sc\b/);
+    $self->{timing} = 1 if ($checkflags =~ / -?-timing\b/ || $checkflags =~ / -?-binary\b/ );
     $self->{trace} = ($opt_trace || $checkflags =~ /-trace\b/
                       || $checkflags =~ /-trace-fst\b/);
     $self->{trace_format} = (($checkflags =~ /-trace-fst/ && $self->{sc} && 'fst-sc')
                              || ($checkflags =~ /-trace-fst/ && !$self->{sc} && 'fst-c')
                              || ($self->{sc} && 'vcd-sc')
                              || (!$self->{sc} && 'vcd-c'));
-    $self->{savable} = 1 if ($checkflags =~ /-savable\b/);
-    $self->{coverage} = 1 if ($checkflags =~ /-coverage\b/);
     $self->{sanitize} = $opt_sanitize unless exists($self->{sanitize});
     $self->{benchmarksim} = 1 if ($param{benchmarksim});
 
@@ -922,8 +948,7 @@ sub compile_vlt_flags {
     unshift @verilator_flags, "--rr" if $opt_rr;
     unshift @verilator_flags, "--x-assign unique";  # More likely to be buggy
     unshift @verilator_flags, "--trace" if $opt_trace;
-    my $threads = ::calc_threads($Vltmt_threads);
-    unshift @verilator_flags, "--threads $threads" if $param{vltmt} && $checkflags !~ /-threads /;
+    unshift @verilator_flags, "--threads $param{threads}" if $param{threads} >= 0;
     unshift @verilator_flags, "--trace-threads 2" if $param{vltmt} && $checkflags =~ /-trace-fst /;
     unshift @verilator_flags, "--debug-partition" if $param{vltmt};
     unshift @verilator_flags, "-CFLAGS -ggdb -LDFLAGS -ggdb" if $opt_gdbsim;
@@ -934,22 +959,9 @@ sub compile_vlt_flags {
         $param{make_main} && $param{verilator_make_gmake};
     unshift @verilator_flags, "../" . $self->{main_filename} if
         $param{make_main} && $param{verilator_make_gmake};
-    if (defined $opt_optimize) {
-        my $letters = "";
-        if ($opt_optimize =~ /[a-zA-Z]/) {
-            $letters = $opt_optimize;
-        } else {  # Randomly turn on/off different optimizations
-            foreach my $l ('a' .. 'z') {
-                $letters .= ((rand() > 0.5) ? $l : uc $l);
-            }
-            unshift @verilator_flags, "--trace" if rand() > 0.5;
-            unshift @verilator_flags, "--coverage" if rand() > 0.5;
-        }
-        unshift @verilator_flags, "--O" . $letters;
-    }
 
     my @cmdargs = (
-                   "--prefix " . $param{VM_PREFIX},
+                   "--prefix " . $param{vm_prefix},
                    @verilator_flags,
                    @{$param{verilator_flags2}},
                    @{$param{verilator_flags3}},
@@ -984,17 +996,29 @@ sub compile {
     my $self = (ref $_[0] ? shift : $Self);
     my %param = (tee => 1,
                  %{$self}, @_);  # Default arguments are from $self
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
     $self->oprint("Compile\n") if $self->{verbose};
 
+    die "%Error: 'threads =>' argument must be <= 1 for vlt scenario" if $param{vlt} && $param{threads} > 1;
+    # Compute automatic parameter values
+    $param{threads} = ::calc_threads($Vltmt_threads) if $param{threads} < 0 && $param{vltmt};
+    $param{context_threads} = $param{threads} >= 1 ? $param{threads} : 1 if !$param{context_threads};
+    $self->{threads} = $param{threads};
+    $self->{context_threads} = $param{context_threads};
+
     compile_vlt_cmd(%param);
+
+    my $define_opt = defineOpt($self->{xsim});
+    if (join(' ', @{$self->{v_flags}}) !~ /TEST_DUMPFILE/) {
+        push @{$self->{v_flags}}, ($define_opt . "TEST_DUMPFILE=" . $self->trace_filename);
+    }
 
     if (!$param{make_top_shell}) {
         $param{top_shell_filename}
         = $self->{top_shell_filename} = "";
     } else {
         $param{top_shell_filename}
-        = $self->{top_shell_filename} = "$self->{obj_dir}/$self->{VM_PREFIX}__top." . $self->v_suffix;
+        = $self->{top_shell_filename} = "$self->{obj_dir}/$self->{vm_prefix}__top." . $self->v_suffix;
     }
 
     if ($param{atsim}) {
@@ -1124,19 +1148,17 @@ sub compile {
             $self->skip("Test requires SystemC; ignore error since not installed\n");
             return 1;
         }
-
-        if ($self->{vltmt} && !$self->cfg_with_threaded) {
-            $self->skip("Test requires Verilator configured with threads\n");
+        if ($self->{timing} && !$self->have_coroutines) {
+            $self->skip("Test requires Coroutines; ignore error since not available\n");
             return 1;
         }
-
         if ($param{verilator_make_cmake} && !$self->have_cmake) {
             $self->skip("Test requires CMake; ignore error since not available or version too old\n");
             return 1;
         }
 
         if (!$param{fails} && $param{make_main}) {
-            $self->_make_main();
+            $self->_make_main($param{timing_loop});
         }
 
         if ($param{verilator_make_gmake}
@@ -1150,7 +1172,7 @@ sub compile {
                         expect_filename => $param{expect_filename},
                         verilator_run => 1,
                         cmd => \@vlt_cmd) if $::Opt_Verilation;
-            return 1 if $self->errors || $self->skips || $self->unsupporteds;
+            return 1 if $self->errors || $self->skips;
         }
 
         if ($param{verilator_make_cmake}) {
@@ -1179,7 +1201,7 @@ sub compile {
                                 "-DTEST_OPT_GLOBAL=\"" . ($param{benchmark} ? "-Os" : "-O0") . "\"",
                                 "-DTEST_VERILATION=\"" . $::Opt_Verilation . "\"",
                         ]);
-            return 1 if $self->errors || $self->skips || $self->unsupporteds;
+            return 1 if $self->errors || $self->skips;
         }
 
         if (!$param{fails} && $param{verilator_make_gmake}) {
@@ -1190,13 +1212,13 @@ sub compile {
                                 "-C " . $self->{obj_dir},
                                 "-f " . $FindBin::RealBin . "/Makefile_obj",
                                 ($self->{verbose} ? "" : "--no-print-directory"),
-                                "VM_PREFIX=$self->{VM_PREFIX}",
+                                "VM_PREFIX=$self->{vm_prefix}",
                                 "TEST_OBJ_DIR=$self->{obj_dir}",
                                 "CPPFLAGS_DRIVER=-D" . uc($self->{name}),
                                 ($self->{verbose} ? "CPPFLAGS_DRIVER2=-DTEST_VERBOSE=1" : ""),
                                 ($param{benchmark} ? "" : "OPT_FAST=-O0"),
                                 ($param{benchmark} ? "" : "OPT_GLOBAL=-O0"),
-                                "$self->{VM_PREFIX}",  # bypass default rule, as we don't need archive
+                                "$self->{vm_prefix}",  # bypass default rule, as we don't need archive
                                 ($param{make_flags} || ""),
                         ]);
         }
@@ -1231,7 +1253,7 @@ sub compile {
 
 sub execute {
     my $self = (ref $_[0] ? shift : $Self);
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
     my %param = (%{$self}, @_);  # Default arguments are from $self
     # params may be expect or {tool}_expect
     $self->oprint("Run\n") if $self->{verbose};
@@ -1343,7 +1365,7 @@ sub execute {
     elsif ($param{vlt_all}
         #&& (!$param{needs_v4} || -r "$ENV{VERILATOR_ROOT}/src/V3Gate.cpp")
         ) {
-        $param{executable} ||= "$self->{obj_dir}/$param{VM_PREFIX}";
+        $param{executable} ||= "$self->{obj_dir}/$param{vm_prefix}";
         my $debugger = "";
         if ($opt_gdbsim) {
             $debugger = ($ENV{VERILATOR_GDB} || "gdb") . " ";
@@ -1378,7 +1400,7 @@ sub setenv {
 
 sub inline_checks {
     my $self = (ref $_[0] ? shift : $Self);
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
     return 1 if !$self->{vlt_all};
 
     my %param = (%{$self}, @_);  # Default arguments are from $self
@@ -1423,13 +1445,13 @@ sub inline_checks {
 sub ok {
     my $self = (ref $_[0] ? shift : $Self);
     $self->{ok} = $_[0] if defined $_[0];
-    $self->{ok} = 0 if $self->{errors} || $self->{errors_keep_going} || $self->{skips} || $self->unsupporteds;
+    $self->{ok} = 0 if $self->{errors} || $self->{errors_keep_going} || $self->{skips};
     return $self->{ok};
 }
 
 sub continuing {
     my $self = (ref $_[0] ? shift : $Self);
-    return !($self->errors || $self->skips || $self->unsupporteds);
+    return !($self->errors || $self->skips);
 }
 
 sub errors {
@@ -1451,11 +1473,6 @@ sub scenario_off {
 sub skips {
     my $self = (ref $_[0] ? shift : $Self);
     return $self->{skips};
-}
-
-sub unsupporteds {
-    my $self = (ref $_[0] ? shift : $Self);
-    return $self->{unsupporteds};
 }
 
 sub top_filename {
@@ -1485,10 +1502,11 @@ sub sc {
 }
 
 sub have_sc {
-    my $self = (ref $_[0] ? shift : $Self);
-    return 1 if (defined $ENV{SYSTEMC} || defined $ENV{SYSTEMC_INCLUDE} || $ENV{CFG_HAVE_SYSTEMC});
-    return 1 if $self->verilator_version =~ /systemc found *= *1/i;
-    return 0;
+    return ::_have_sc();
+}
+
+sub have_coroutines {
+    return ::_have_coroutines();
 }
 
 sub make_version {
@@ -1538,6 +1556,12 @@ sub pli_filename {
     return $self->{pli_filename};
 }
 
+sub rerunnable {
+    my $self = (ref $_[0] ? shift : $Self);
+    $self->{rerunnable} = shift if defined $_[0];
+    return $self->{rerunnable};
+}
+
 sub too_few_cores {
     my $threads = ::calc_threads($Vltmt_threads);
     return $threads < $Vltmt_threads;
@@ -1558,10 +1582,10 @@ sub wno_unopthreads_for_few_cores {
     return "";
 }
 
-sub VM_PREFIX {
+sub vm_prefix {
     my $self = (ref $_[0] ? shift : $Self);
-    $self->{VM_PREFIX} = shift if defined $_[0];
-    return $self->{VM_PREFIX};
+    $self->{vm_prefix} = shift if defined $_[0];
+    return $self->{vm_prefix};
 }
 
 #----------------------------------------------------------------------
@@ -1584,7 +1608,7 @@ sub _run {
     if ($param{verilator_run}) {
         # Gcov fails when parallel jobs write same data file,
         # so we make sure .gcda output dir is unique across all running jobs.
-        # We can't just put each one in a unique obj_dir as it uses too much disk.
+        # We can't just put each one in an unique obj_dir as it uses too much disk.
         # Must use absolute path as some execute()s have different PWD
         $ENV{GCOV_PREFIX_STRIP} = 99;
         $ENV{GCOV_PREFIX} = File::Spec->rel2abs("$FindBin::RealBin/obj_dist/gcov_$self->{running_id}");
@@ -1656,8 +1680,12 @@ sub _run {
     if (!$param{fails} && $status) {
         my $firstline = "";
         if (my $fh = IO::File->new("<$param{logfile}")) {
-            $firstline = $fh->getline || '';
-            chomp $firstline;
+            while (defined(my $line = $fh->getline)) {
+                next if $line =~ /^- /;  # Debug message
+                $firstline = $line;
+                chomp $firstline;
+                last;
+            }
         }
         $self->error("Exec of $param{cmd}[0] failed: $firstline\n");
     }
@@ -1667,7 +1695,7 @@ sub _run {
     if ($param{fails} && !$status) {
         $self->error("Exec of $param{cmd}[0] ok, but expected to fail\n");
     }
-    return if $self->errors || $self->skips || $self->unsupporteds;
+    return if $self->errors || $self->skips;
 
     # Read the log file a couple of times to allow for NFS delays
     if ($param{check_finished} || $param{expect}) {
@@ -1742,6 +1770,11 @@ sub _try_regex {
 
 sub _make_main {
     my $self = shift;
+    my $timing_loop = shift;
+
+    if ($timing_loop && $self->sc) {
+        $self->error("Cannot use timing loop and SystemC together!\n");
+    }
 
     if ($self->vhdl) {
         $self->_read_inputs_vhdl();
@@ -1764,8 +1797,8 @@ sub _make_main {
     print $fh "#include \"verilatedos.h\"\n";
 
     print $fh "// Generated header\n";
-    my $VM_PREFIX = $self->{VM_PREFIX};
-    print $fh "#include \"$VM_PREFIX.h\"\n";
+    my $vm_prefix = $self->{vm_prefix};
+    print $fh "#include \"${vm_prefix}.h\"\n";
 
     print $fh "// General headers\n";
     print $fh "#include \"verilated.h\"\n";
@@ -1776,7 +1809,7 @@ sub _make_main {
     print $fh "#include \"verilated_vcd_sc.h\"\n" if $self->{trace} && $self->{trace_format} eq 'vcd-sc';
     print $fh "#include \"verilated_save.h\"\n" if $self->{savable};
 
-    print $fh "std::unique_ptr<$VM_PREFIX> topp;\n";
+    print $fh "std::unique_ptr<${vm_prefix}> topp;\n";
 
     if ($self->{savable}) {
         $fh->print("\n");
@@ -1806,17 +1839,18 @@ sub _make_main {
         print $fh "    sc_set_time_resolution(1, $Self->{sc_time_resolution});\n";
         print $fh "    sc_time sim_time($self->{sim_time}, $Self->{sc_time_resolution});\n";
     } else {
-        print $fh "int main(int argc, char** argv, char** env) {\n";
+        print $fh "int main(int argc, char** argv) {\n";
         print $fh "    uint64_t sim_time = $self->{sim_time};\n";
     }
 
     print $fh "    const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};\n";
+    print $fh "    contextp->threads($self->{context_threads});\n";
     print $fh "    contextp->commandArgs(argc, argv);\n";
     print $fh "    contextp->debug(" . ($self->{verilated_debug} ? 1 : 0) . ");\n";
     print $fh "    srand48(5);\n";  # Ensure determinism
     print $fh "    contextp->randReset(" . $self->{verilated_randReset} . ");\n"
         if defined $self->{verilated_randReset};
-    print $fh "    topp.reset(new $VM_PREFIX(\"top\"));\n";
+    print $fh "    topp.reset(new ${vm_prefix}(\"top\"));\n";
     print $fh "    contextp->internalsDump()\n;" if $self->{verilated_debug};
 
     my $set;
@@ -1855,7 +1889,7 @@ sub _make_main {
 
     if ($self->{savable}) {
         $fh->print("    const char* save_time_strp = contextp->commandArgsPlusMatch(\"save_time=\");\n");
-        $fh->print("    unsigned int save_time = !save_time_strp[0] ? 0 : atoi(save_time_strp+strlen(\"+save_time=\"));\n");
+        $fh->print("    unsigned int save_time = !save_time_strp[0] ? 0 : std::atoi(save_time_strp + std::strlen(\"+save_time=\"));\n");
         $fh->print("    const char* save_restore_strp = contextp->commandArgsPlusMatch(\"save_restore=\");\n");
         $fh->print("    unsigned int save_restore = !save_restore_strp[0] ? 0 : 1;\n");
     }
@@ -1869,33 +1903,61 @@ sub _make_main {
     }
     print $fh "        ${set}fastclk = false;\n" if $self->{inputs}{fastclk};
     print $fh "        ${set}clk = false;\n" if $self->{inputs}{clk};
-    _print_advance_time($self, $fh, 10);
+    if (!$timing_loop) {
+        _print_advance_time($self, $fh, 10);
+    }
     print $fh "    }\n";
 
     my $time = $self->sc ? "sc_time_stamp()" : "contextp->time()";
 
-    print $fh "    while ((${time} < sim_time * MAIN_TIME_MULTIPLIER)\n";
-    print $fh "           && !contextp->gotFinish()) {\n";
+    print $fh "    while (";
+    if (!$timing_loop || $self->{inputs}{clk}) {
+        print $fh "(${time} < sim_time * MAIN_TIME_MULTIPLIER) && ";
+    }
+    print $fh "!contextp->gotFinish()) {\n";
 
-    for (my $i = 0; $i < 5; $i++) {
-        my $action = 0;
-        if ($self->{inputs}{fastclk}) {
-            print $fh "        ${set}fastclk = !${set}fastclk;\n";
-            $action = 1;
+    if ($timing_loop) {
+        print $fh "        topp->eval();\n";
+        if ($self->{trace}) {
+            $fh->print("#if VM_TRACE\n");
+            $fh->print("        if (tfp) tfp->dump(contextp->time());\n");
+            $fh->print("#endif  // VM_TRACE\n");
         }
-        if ($i == 0 && $self->{inputs}{clk}) {
-            print $fh "        ${set}clk = !${set}clk;\n";
-            $action = 1;
+        if ($self->{inputs}{clk}) {
+            print $fh "        uint64_t cycles = contextp->time() / MAIN_TIME_MULTIPLIER;\n";
+            print $fh "        uint64_t new_time = (cycles + 1) * MAIN_TIME_MULTIPLIER;\n";
+            print $fh "        if (topp->eventsPending() &&\n";
+            print $fh "            topp->nextTimeSlot() / MAIN_TIME_MULTIPLIER <= cycles) {\n";
+            print $fh "            new_time = topp->nextTimeSlot();\n";
+            print $fh "        } else {\n";
+            print $fh "            ${set}clk = !${set}clk;\n";
+            print $fh "        }\n";
+            print $fh "        contextp->time(new_time);\n";
+        } else {
+            print $fh "        if (!topp->eventsPending()) break;\n";
+            print $fh "        contextp->time(topp->nextTimeSlot());\n";
         }
-        if ($self->{savable}) {
-            $fh->print("        if (save_time && ${time} == save_time) {\n");
-            $fh->print("            save_model(\"$self->{obj_dir}/saved.vltsv\");\n");
-            $fh->print("            printf(\"Exiting after save_model\\n\");\n");
-            $fh->print("            topp.reset(nullptr);\n");
-            $fh->print("            return 0;\n");
-            $fh->print("        }\n");
+    } else {
+        for (my $i = 0; $i < 5; $i++) {
+            my $action = 0;
+            if ($self->{inputs}{fastclk}) {
+                print $fh "        ${set}fastclk = !${set}fastclk;\n";
+                $action = 1;
+            }
+            if ($i == 0 && $self->{inputs}{clk}) {
+                print $fh "        ${set}clk = !${set}clk;\n";
+                $action = 1;
+            }
+            if ($self->{savable}) {
+                $fh->print("        if (save_time && ${time} == save_time) {\n");
+                $fh->print("            save_model(\"$self->{obj_dir}/saved.vltsv\");\n");
+                $fh->print("            printf(\"Exiting after save_model\\n\");\n");
+                $fh->print("            topp.reset(nullptr);\n");
+                $fh->print("            return 0;\n");
+                $fh->print("        }\n");
+            }
+            _print_advance_time($self, $fh, 1, $action);
         }
-        _print_advance_time($self, $fh, 1, $action);
     }
     if ($self->{benchmarksim}) {
         $fh->print("        if (VL_UNLIKELY(!warm)) {\n");
@@ -1951,7 +2013,7 @@ sub _print_advance_time {
     else { $set = "topp->"; }
 
     if ($self->sc) {
-        print $fh "        sc_start(${time}, $Self->{sc_time_resolution});\n";
+        print $fh "        sc_start(${time} * MAIN_TIME_MULTIPLIER, $Self->{sc_time_resolution});\n";
     } else {
         if ($action) {
             print $fh "        ${set}eval();\n";
@@ -2131,22 +2193,6 @@ sub _read_inputs_vhdl {
 }
 
 #######################################################################
-# Verilator utilities
-
-our $_Verilator_Version;
-sub verilator_version {
-    # Returns verbose version, line 1 contains actual version
-    if (!defined $_Verilator_Version) {
-        my @args = ("perl", "$ENV{VERILATOR_ROOT}/bin/verilator", "-V");
-        my $args = join(' ', @args);
-        $_Verilator_Version = `$args`;
-        $_Verilator_Version or die "can't fork: $! " . join(' ', @args);
-        chomp $_Verilator_Version;
-    }
-    return $_Verilator_Version if defined $_Verilator_Version;
-}
-
-#######################################################################
 # File utilities
 
 sub files_identical {
@@ -2154,7 +2200,7 @@ sub files_identical {
     my $fn1 = shift;
     my $fn2 = shift;
     my $fn1_is_logfile = shift;
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
 
   try:
     for (my $try = $self->tries - 1; $try >= 0; $try--) {
@@ -2187,7 +2233,7 @@ sub files_identical {
                     && !/\+\+\+ \/tmp\//  # t_difftree.pl
             } @l1;
             @l1 = map {
-                s/(Internal Error: [^\n]+\.cpp):[0-9]+:/$1:#:/;
+                while (s/(Internal Error: [^\n]+\.(cpp|h)):[0-9]+/$1:#/g) {}
                 s/^-V\{t[0-9]+,[0-9]+\}/-V{t#,#}/;  # --vlt vs --vltmt run differences
                 $_;
             } @l1;
@@ -2199,6 +2245,7 @@ sub files_identical {
                 $l1[$l] =~ s/CPU Time: +[0-9.]+ seconds[^\n]+/CPU Time: ###/mig;
                 $l1[$l] =~ s/\?v=[0-9.]+/?v=latest/mig;  # warning URL
                 $l1[$l] =~ s/_h[0-9a-f]{8}_/_h########_/mg;
+                $l1[$l] =~ s/ \/[^ ]+\/verilated_std.sv/ verilated_std.sv/mg;
                 if ($l1[$l] =~ s/Exiting due to.*/Exiting due to/mig) {
                     splice @l1, $l+1;  # Trunc rest
                     last;
@@ -2231,7 +2278,7 @@ sub files_identical_sorted {
     my $fn1 = shift;
     my $fn2 = shift;
     my $fn1_is_logfile = shift;
-    return 1 if $self->errors || $self->skips || $self->unsupporteds;
+    return 1 if $self->errors || $self->skips;
     # Set LC_ALL as suggested in the sort manpage to avoid sort order
     # changes from the locale.
     setenv('LC_ALL', "C");
@@ -2255,7 +2302,7 @@ sub vcd_identical {
     my $self = (ref $_[0] ? shift : $Self);
     my $fn1 = shift;
     my $fn2 = shift;
-    return 0 if $self->errors || $self->skips || $self->unsupporteds;
+    return 0 if $self->errors || $self->skips;
     if (!-r $fn1) { $self->error("Vcd_identical file does not exist $fn1\n"); return 0; }
     if (!-r $fn2) { $self->error("Vcd_identical file does not exist $fn2\n"); return 0; }
     {
@@ -2269,10 +2316,15 @@ sub vcd_identical {
         print "\t$cmd\n" if $::Debug;
         $out = `$cmd`;
         if ($? != 0 || $out ne '') {
-            print $out;
-            $self->error("VCD miscompares $fn1 $fn2\n");
-            $self->copy_if_golden($fn1, $fn2);
-            return 0;
+            $cmd = qq{vcddiff "$fn2" "$fn1"};
+            print "\t$cmd\n" if $::Debug;
+            $out = `$cmd`;
+            if ($? != 0 || $out ne '') {
+                print $out;
+                $self->error("VCD miscompares $fn2 $fn1\n");
+                $self->copy_if_golden($fn1, $fn2);
+                return 0;
+            }
         }
     }
     {
@@ -2313,7 +2365,7 @@ sub fst_identical {
     my $self = (ref $_[0] ? shift : $Self);
     my $fn1 = shift;
     my $fn2 = shift;
-    return 0 if $self->errors || $self->skips || $self->unsupporteds;
+    return 0 if $self->errors || $self->skips;
     my $tmp = $fn1 . ".vcd";
     fst2vcd($fn1, $tmp);
     return vcd_identical($tmp, $fn2);
@@ -2355,10 +2407,6 @@ sub cxx_version {
     return $_Cxx_Version;
 }
 
-sub cfg_with_threaded {
-    return 1;  # C++11 now always required
-}
-
 our $_Cfg_with_ccache;
 
 sub cfg_with_ccache {
@@ -2391,7 +2439,7 @@ sub glob_all {
 sub glob_one {
     my $self = (ref $_[0] ? shift : $Self);
     my $pattern = shift;
-    return if $self->errors || $self->skips || $self->unsupporteds;
+    return if $self->errors || $self->skips;
 
     my @files = glob($pattern);
     my $n = scalar @files;
@@ -2413,7 +2461,7 @@ sub file_grep_not {
     my $filename = shift;
     my $regexp = shift;
     my $expvalue = shift;
-    return if $self->errors || $self->skips || $self->unsupporteds;
+    return if $self->errors || $self->skips;
     !defined $expvalue or $self->error("file_grep_not: Unexpected 3rd argument: $expvalue");
 
     my $contents = $self->file_contents($filename);
@@ -2428,7 +2476,7 @@ sub file_grep {
     my $filename = shift;
     my $regexp = shift;
     my $expvalue = shift;
-    return if $self->errors || $self->skips || $self->unsupporteds;
+    return if $self->errors || $self->skips;
 
     my $contents = $self->file_contents($filename);
     return if ($contents eq "_Already_Errored_");
@@ -2444,7 +2492,7 @@ sub file_grep_any {
     my @filenames = @{$_[0]}; shift;
     my $regexp = shift;
     my $expvalue = shift;
-    return if $self->errors || $self->skips || $self->unsupporteds;
+    return if $self->errors || $self->skips;
 
     foreach my $filename (@filenames) {
         my $contents = $self->file_contents($filename);
@@ -2473,7 +2521,7 @@ sub file_contents {
         my $fh = IO::File->new("<$filename");
         if (!$fh) {
             $_File_Contents_Cache{$filename} = "_Already_Errored_";
-            $self->error("File_grep file not found: " . $filename . "\n");
+            $self->error("File_contents file not found: " . $filename . "\n");
             return $_File_Contents_Cache{$filename};
         }
         local $/; undef $/;
@@ -2635,435 +2683,19 @@ driver.pl - Run regression tests
 
 =head1 SYNOPSIS
 
-  driver.pl
+  make test    # In Verilator directory
+  ./driver.pl  # Or, to run directly
 
 =head1 DESCRIPTION
 
 driver.pl invokes Verilator or another simulator on each test file.
-
-The driver reports the number of tests which pass, fail, skipped (some
-resource required by the test is not available, such as SystemC), or are
-unsupported (buggy or require a feature change before will pass.)
-
-There are hundreds of tests, and for faster completion you may want to run
-the regression tests with OBJCACHE enabled and in parallel on a machine
-with many cores.  See the -j option and OBJCACHE environment variable.
-
-=head1 TEST CONFIGURATION
-
-The test configuration script (e.g. C<test_regres/t/t_EXAMPLE.pl>) controls
-how the test will run by driver.pl. In general it includes a call to the
-C<compile> subroutine to compile the test with Verilator (or an alternative
-simulator), followed by a call to the C<execute> subroutine to run the
-test. Compile-only tests omit the call to C<execute>.
-
-If those complete, the script calls C<ok(1)> to increment the count of
-successful tests and then returns 1 as its result.
-
-Both C<compile> and C<execute> take an optional argument hash table to
-control their behavior. For example:
-
-  compile(
-     verilator_flags2 => ["--lint-only"],
-     fails => 1,
-  );
-
-indicates that when compiling this test, the C<--lint-only> flag should be
-passed and that the test is expected to fail.
-
-The full list of arguments can be found by looking at the C<driver.pl>
-source code. Some commonly used arguments are:
-
-=over 4
-
-=item all_run_flags
-
-A list of flags to be passed when running the simulator (Verilated model or
-one of the other simulators).
-
-=item check_finished
-
-Set to 1 to indicate successful completion of the test is indicated by the
-string C<*-* All Finished *-*> being printed on standard output. This is
-the normal way for successful tests to finish.
-
-=item expect
-
-A quoted list of strings or regular expression to be matched in the
-output. See </HINTS ON WRITING TESTS> for more detail on how this argument
-should be used.
-
-=item fails
-
-Set to 1 to indicate this step (C<compile> or C<execute> or C<lint>) is
-expected to fail.  Tests that are expected to fail generally have _bad in
-their filename.
-
-=item make_main
-
-Set to 0 to disable the automatic creation of a C++ test wrapper (for
-example when a hand-written test wrapper is provided using C<--exe>).
-
-=item make_top_shell
-
-Set to 0 to disable the automatic creation of a top level shell to run the
-executable (for example when a hand-written test wrapper is provided using
-C<--exe>).
-
-=item ms_flags
-
-=item ms_flags2
-
-=item ms_run_flags
-
-The equivalent of C<v_flags>, C<v_flags2> and C<all_run_flags>, but only
-for use with the ModelSim simulator.
-
-=item nc_flags
-
-=item nc_flags2
-
-=item nc_run_flags
-
-The equivalent of C<v_flags>, C<v_flags2> and C<all_run_flags>, but only
-for use with the Cadence NC simulator.
-
-=item iv_flags
-
-=item iv_flags2
-
-=item iv_run_flags
-
-The equivalent of C<v_flags>, C<v_flags2> and C<all_run_flags>, but only
-for use with the Icarus Verilog simulator.
-
-=item v_flags
-
-A list of standard Verilog simulator flags to be passed to the simulator
-compiler (Verilator or one of the other simulators).  This list is create
-by the driver and rarely changed, use v_flags2 instead.
-
-=item v_flags2
-
-A list of standard Verilog simulator flags to be passed to the simulator
-compiler (Verilator or one of the other simulators). Unlike v_flags, these
-options may be overridden in some simulation files.
-
-Similar sets of flags exist for atsim, GHDL, Cadence NC, Modelsim and
-Synopsys VCS.
-
-=item vcs_flags
-
-=item vcs_flags2
-
-=item vcs_run_flags
-
-The equivalent of C<v_flags>, C<v_flags2> and C<all_run_flags>, but only
-for use with the Synopsys VCS simulator.
-
-=item verilator_flags
-
-=item verilator_flags2
-
-The equivalent of C<v_flags> and C<v_flags2>, but only for use with
-Verilator.  If a flag is a standard flag (+incdir for example) v_flags2
-should be used instead.
-
-=item benchmarksim
-
-Output the number of model evaluations and execution time of a test to
-I<test_output_dir>/I<test_name>_benchmarksim.csv. Multiple invocations
-of the same test file will append to to the same .csv file.
-
-=item xsim_flags
-
-=item xsim_flags2
-
-=item xsim_run_flags
-
-The equivalent of C<v_flags>, C<v_flags2> and C<all_run_flags>, but only
-for use with the Xilinx XSim simulator.
-
-=back
-
-=head2 HINTS ON WRITING TESTS
-
-There is generally no need for the test to create its own main program or
-top level shell as the driver creates one automatically, however some tests
-require their own C++ or SystemC test harness. This is commonly given the
-same name as the test, but with .cpp as suffix
-(C<test_regress/t/t_EXAMPLE.cpp>). This can be specified as follows:
-
-  compile(
-      make_top_shell   => 0,
-      make_main        => 0,
-      verilator_flags2 => ["--exe $Self->{t_dir}/$Self->{name}.cpp"], );
-
-Tests should be self-checking, rather than producing lots of output. If a
-test succeeds it should print C<*-* All Finished *-*> to standard output
-and terminate (in Verilog C<$finish>), if not it should just stop (in
-Verilog C<$stop>) as that signals an error.
-
-If termination should be triggered from the C++ wrapper, the following code
-can be used:
-
-  vl_fatal(__FILE__, __LINE__, "dut", "<error message goes here>");
-  exit(1);
-
-This can be particularly useful if checking that the Verilator model has
-not unexpectedly terminated.
-
-  if (contextp->gotFinish()) {
-      vl_fatal(__FILE__, __LINE__, "dut", "<error message goes here>");
-      exit(1);
-  }
-
-Where it might be useful for a test to produce output, it should qualify
-this with C<TEST_VERBOSE>. For example in Verilog:
-
-  `ifdef TEST_VERBOSE
-        $write("Conditional generate if MASK [%1d] = %d\n", g, MASK[g]);
-  `endif
-
-Or in a hand-written C++ wrapper:
-
-  #ifdef TEST_VERBOSE
-      cout << "Read  a     = " << a << endl;
-  #endif
-
-The C<expect_filename> specifies a filename that should be used to check
-the output results. This should not generally be used to decide if a test
-has succeeded. However, in the case of tests that are designed to fail at
-compile time, it is the only option. For example:
-
-  compile(
-      fails => 1,
-      expect_filename => $Self->{golden_filename},
-      );
-
-Note expect_filename strips some debugging information from the logfile
-when comparing.
-
-The C<expect> argument specifies a regular expression which must match the
-output.
-
-=head1 DRIVER ARGUMENTS
-
-=over 4
-
-=item --benchmark [<cycles>]
-
-Show execution times of each step.  If an optional number is given,
-specifies the number of simulation cycles (for tests that support it).
-
-=item --debug
-
-Same as C<verilator --debug>: Use the debug version of Verilator which
-enables additional assertions, debugging messages, and structure dump
-files.
-
-=item --debugi(-<srcfile>) <level>
-
-Same as C<verilator --debugi level>: Set Verilator internal debugging level
-globally to the specified debug level (1-10) or set the specified source
-file to the specified level. Higher levels produce more detailed messages
-(plain C<--debug> is equivalent to C<--debugi 4>).
-
-=item --dump-tree
-
-Same as C<verilator --dump-tree>: Enable Verilator writing .tree debug
-files with dumping level 3, which dumps the standard critical stages.  For
-details on the format see the Verilator Internals manual.
-
-=item --gdb
-
-Same as C<verilator --gdb>: Run Verilator under the debugger.
-
-=item --gdbbt
-
-Same as C<verilator --gdbbt>: Run Verilator under the debugger, only to
-print backtrace information.  Requires --debug.
-
-=item --gdbsim
-
-Run Verilator generated executable under the debugger.
-
-=item --golden
-
-Update golden files, equivalent to setting HARNESS_UPDATE_GOLDEN=1.
-
-=item --hashset I<set>/I<numsets>
-
-Split tests based on a hash of the test names into I<numsets> and run only
-tests in set number I<set> (0..I<numsets>-1).
-
-=item --help
-
-Displays this message and program version and exits.
-
-=item --j #
-
-Run number of parallel tests, or 0 to determine the count based on the
-number of cores installed.  Requires Perl's Parallel::Forker package.
-
-=item --optimize
-
-Randomly turn on/off different optimizations.  With specific flags,
-use those optimization settings
-
-=item --quiet
-
-Suppress all output except for failures and progress messages every 15
-seconds.  Intended for use only in automated regressions.  See also
-C<--rerun>, and C<--verbose> which is not the opposite of C<--quiet>.
-
-=item --rerun
-
-Rerun all tests that failed in this run. Reruns force the flags
-C<--no-quiet --j 1>.
-
-=item --rr
-
-Same as C<verilator --rr>: Run Verilator and record with rr.
-
-=item --rrsim
-
-Run Verilator generated executable and record with rr.
-
-=item --sanitize
-
-Enable address sanitizer to compile Verilated C++ code.
-This may detect misuses of memory, such as out-of-bound accesses, use-after-free,
-and memory leaks.
-
-=item --site
-
-Run site specific tests also.
-
-=item --stop
-
-Stop on the first error.
-
-=item --trace
-
-Set the simulator specific flags to request waveform tracing.
-
-=item --unsupported
-
-Run tests even if marked as unsupported.
-
-=item --verbose
-
-Compile and run the test in verbose mode. This means C<TEST_VERBOSE> will
-be defined for the test (Verilog and any C++/SystemC wrapper).
-
-=back
-
-=head1 SCENARIO ARGUMENTS
-
-The following options control which simulator is used, and which tests are
-run.  Multiple flags may be used to run multiple simulators/scenarios
-simultaneously.
-
-=over 4
-
-=item --atsim
-
-Run ATSIM simulator tests.
-
-=item --dist
-
-Run simulator-agnostic distribution tests.
-
-=item --ghdl
-
-Run GHDL simulator tests.
-
-=item --iv
-
-Run Icarus Verilog simulator tests.
-
-=item --ms
-
-Run ModelSim simulator tests.
-
-=item --nc
-
-Run Cadence NC-Verilog simulator tests.
-
-=item --vcs
-
-Run Synopsys VCS simulator tests.
-
-=item --vlt
-
-Run Verilator tests in single-threaded mode.  Default unless another scenario flag is provided.
-
-=item --vltmt
-
-Run Verilator tests in multithreaded mode.
-
-=item --xsim
-
-Run Xilinx XSim simulator tests.
-
-=back
-
-=head1 ENVIRONMENT
-
-=over 4
-
-=item SYSTEMC
-
-Root directory name of SystemC kit.  Only used if SYSTEMC_INCLUDE not set.
-
-=item SYSTEMC_INCLUDE
-
-Directory name with systemc.h in it.
-
-=item VERILATOR_GHDL
-
-Command to use to invoke GHDL.
-
-=item VERILATOR_IVERILOG
-
-Command to use to invoke Icarus Verilog.
-
-=item VERILATOR_MAKE
-
-Command to use to rebuild Verilator and run single test.  Defaults to "make &&".
-
-=item VERILATOR_MODELSIM
-
-Command to use to invoke ModelSim.
-
-=item VERILATOR_NCVERILOG
-
-Command to use to invoke ncverilog.
-
-=item VERILATOR_TESTS_SITE
-
-Used with --site, a colon-separated list of directories with tests to be added to testlist.
-
-=item VERILATOR_VCS
-
-Command to use to invoke VCS.
-
-=item VERILATOR_XELAB
-
-Command to use to invoke XSim xelab
-
-=item VERILATOR_XVLOG
-
-Command to use to invoke XSim xvlog
-
-=back
+See docs/internals.rst in the distribution for more information.
 
 =head1 DISTRIBUTION
 
 The latest version is available from L<https://verilator.org>.
 
-Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 can redistribute it and/or modify it under the terms of either the GNU
 Lesser General Public License Version 3 or the Perl Artistic License
 Version 2.0.

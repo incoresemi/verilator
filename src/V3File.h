@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2023 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -22,11 +22,13 @@
 
 #include "V3Error.h"
 
-#include <stack>
-#include <set>
-#include <list>
-#include <vector>
+#include <array>
 #include <fstream>
+#include <list>
+#include <memory>
+#include <set>
+#include <stack>
+#include <vector>
 
 //============================================================================
 // V3File: Create streams, recording dependency information
@@ -37,7 +39,7 @@ public:
         addSrcDepend(filename);
         return new_ifstream_nodepend(filename);
     }
-    static std::ifstream* new_ifstream_nodepend(const string& filename) {
+    static std::ifstream* new_ifstream_nodepend(const string& filename) VL_MT_SAFE {
         return new std::ifstream{filename.c_str()};
     }
     static std::ofstream* new_ofstream(const string& filename, bool append = false) {
@@ -59,8 +61,8 @@ public:
     }
 
     // Dependencies
-    static void addSrcDepend(const string& filename);
-    static void addTgtDepend(const string& filename);
+    static void addSrcDepend(const string& filename) VL_MT_SAFE;
+    static void addTgtDepend(const string& filename) VL_MT_SAFE;
     static void writeDepend(const string& filename);
     static std::vector<string> getAllDeps();
     static void writeTimes(const string& filename, const string& cmdlineIn);
@@ -124,7 +126,7 @@ private:
     bool m_inStringLiteral = false;
     int m_indentLevel = 0;  // Current {} indentation
     std::stack<int> m_parenVec;  // Stack of columns where last ( was
-    int m_bracketLevel = 0;  // Intenting = { block, indicates number of {'s seen.
+    int m_bracketLevel = 0;  // Indenting = { block, indicates number of {'s seen.
 
     int endLevels(const char* strg);
     void putcNoTracking(char chr);
@@ -154,9 +156,6 @@ public:
         puts(strg);
     }
     bool exceededWidth() const { return m_column > m_commaWidth; }
-    bool tokenMatch(const char* cp, const char* cmp);
-    bool tokenStart(const char* cp);
-    bool tokenEnd(const char* cp);
     void indentInc() { m_indentLevel += m_blockIndent; }
     void indentDec() {
         m_indentLevel -= m_blockIndent;
@@ -172,38 +171,83 @@ public:
     // STATIC METHODS
     static string indentSpaces(int num);
     // Add escaped characters to strings
-    static string quoteNameControls(const string& namein, Language lang = LA_C);
+    static string quoteNameControls(const string& namein, Language lang = LA_C) VL_PURE;
+    static bool tokenMatch(const char* cp, const char* cmp);
+    static bool tokenNotStart(const char* cp);  // Import/export meaning no endfunction
+    static bool tokenStart(const char* cp);
+    static bool tokenEnd(const char* cp);
 
     // CALLBACKS - MUST OVERRIDE
     virtual void putcOutput(char chr) = 0;
+    virtual void putsOutput(const char* str) = 0;
 };
 
 //============================================================================
 // V3OutFile: A class for printing to a file, with automatic indentation of C++ code.
 
 class V3OutFile VL_NOT_FINAL : public V3OutFormatter {
+    // Size of m_bufferp.
+    // 128kB has been experimentally determined to be in the zone of buffer sizes that work best.
+    // It is also considered to be the smallest I/O buffer size in GNU coreutils (io_blksize) that
+    // allows to best minimize syscall overhead.
+    // The hard boundaries are CPU L2/L3 cache size on the top and filesystem block size
+    // on the bottom.
+    static constexpr std::size_t WRITE_BUFFER_SIZE_BYTES = 128 * 1024;
+
     // MEMBERS
     FILE* m_fp = nullptr;
+    std::size_t m_usedBytes = 0;  // Number of bytes stored in m_bufferp
+    std::unique_ptr<std::array<char, WRITE_BUFFER_SIZE_BYTES>> m_bufferp;  // Write buffer
 
 public:
     V3OutFile(const string& filename, V3OutFormatter::Language lang);
-    virtual ~V3OutFile() override;
+    V3OutFile(const V3OutFile&) = delete;
+    V3OutFile& operator=(const V3OutFile&) = delete;
+    V3OutFile(V3OutFile&&) = delete;
+    V3OutFile& operator=(V3OutFile&&) = delete;
+
+    ~V3OutFile() override;
     void putsForceIncs();
 
 private:
+    void writeBlock() {
+        if (VL_LIKELY(m_usedBytes > 0)) fwrite(m_bufferp->data(), m_usedBytes, 1, m_fp);
+        m_usedBytes = 0;
+    }
+
     // CALLBACKS
-    virtual void putcOutput(char chr) override { fputc(chr, m_fp); }
+    void putcOutput(char chr) override {
+        m_bufferp->at(m_usedBytes++) = chr;
+        if (VL_UNLIKELY(m_usedBytes >= WRITE_BUFFER_SIZE_BYTES)) writeBlock();
+    }
+    void putsOutput(const char* str) override {
+        std::size_t len = strlen(str);
+        std::size_t availableBytes = WRITE_BUFFER_SIZE_BYTES - m_usedBytes;
+        while (VL_UNLIKELY(len >= availableBytes)) {
+            std::memcpy(m_bufferp->data() + m_usedBytes, str, availableBytes);
+            m_usedBytes = WRITE_BUFFER_SIZE_BYTES;
+            writeBlock();
+            str += availableBytes;
+            len -= availableBytes;
+            availableBytes = WRITE_BUFFER_SIZE_BYTES;
+        }
+        if (len > 0) {
+            std::memcpy(m_bufferp->data() + m_usedBytes, str, len);
+            m_usedBytes += len;
+        }
+    }
 };
 
 class V3OutCFile VL_NOT_FINAL : public V3OutFile {
     int m_guard = false;  // Created header guard
     int m_private;  // 1 = Most recently emitted private:, 2 = public:
 public:
-    explicit V3OutCFile(const string& filename)
-        : V3OutFile{filename, V3OutFormatter::LA_C} {
+    explicit V3OutCFile(const string& filename,
+                        V3OutFormatter::Language lang = V3OutFormatter::LA_C)
+        : V3OutFile{filename, lang} {
         resetPrivate();
     }
-    virtual ~V3OutCFile() override = default;
+    ~V3OutCFile() override = default;
     virtual void putsHeader() { puts("// Verilated -*- C++ -*-\n"); }
     virtual void putsIntTopInclude() { putsForceIncs(); }
     virtual void putsGuard();
@@ -227,21 +271,21 @@ class V3OutScFile final : public V3OutCFile {
 public:
     explicit V3OutScFile(const string& filename)
         : V3OutCFile{filename} {}
-    virtual ~V3OutScFile() override = default;
-    virtual void putsHeader() override { puts("// Verilated -*- SystemC -*-\n"); }
-    virtual void putsIntTopInclude() override {
+    ~V3OutScFile() override = default;
+    void putsHeader() override { puts("// Verilated -*- SystemC -*-\n"); }
+    void putsIntTopInclude() override {
         putsForceIncs();
         puts("#include \"systemc.h\"\n");
         puts("#include \"verilated_sc.h\"\n");
     }
 };
 
-class V3OutVFile final : public V3OutFile {
+class V3OutVFile final : public V3OutCFile {
 public:
     explicit V3OutVFile(const string& filename)
-        : V3OutFile{filename, V3OutFormatter::LA_VERILOG} {}
-    virtual ~V3OutVFile() override = default;
-    virtual void putsHeader() { puts("// Verilated -*- Verilog -*-\n"); }
+        : V3OutCFile{filename, V3OutFormatter::LA_VERILOG} {}
+    ~V3OutVFile() override = default;
+    void putsHeader() override { puts("// Verilated -*- Verilog -*-\n"); }
 };
 
 class V3OutXmlFile final : public V3OutFile {
@@ -250,7 +294,7 @@ public:
         : V3OutFile{filename, V3OutFormatter::LA_XML} {
         blockIndent(2);
     }
-    virtual ~V3OutXmlFile() override = default;
+    ~V3OutXmlFile() override = default;
     virtual void putsHeader() { puts("<?xml version=\"1.0\" ?>\n"); }
 };
 
@@ -258,7 +302,7 @@ class V3OutMkFile final : public V3OutFile {
 public:
     explicit V3OutMkFile(const string& filename)
         : V3OutFile{filename, V3OutFormatter::LA_MK} {}
-    virtual ~V3OutMkFile() override = default;
+    ~V3OutMkFile() override = default;
     virtual void putsHeader() { puts("# Verilated -*- Makefile -*-\n"); }
     // No automatic indentation yet.
     void puts(const char* strg) { putsNoTracking(strg); }
@@ -274,10 +318,10 @@ class VIdProtect final {
 public:
     // METHODS
     // Rename to a new encoded string (unless earlier passthru'ed)
-    static string protect(const string& old) { return protectIf(old, true); }
-    static string protectIf(const string& old, bool doIt = true);
+    static string protect(const string& old) VL_MT_SAFE { return protectIf(old, true); }
+    static string protectIf(const string& old, bool doIt = true) VL_MT_SAFE;
     // Rename words to a new encoded string
-    static string protectWordsIf(const string& old, bool doIt = true);
+    static string protectWordsIf(const string& old, bool doIt = true) VL_MT_SAFE;
     // Write map of renames to output file
     static void writeMapFile(const string& filename);
 };

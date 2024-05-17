@@ -19,7 +19,9 @@
 # cmake ..
 # cmake --build .
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.12)
+cmake_policy(SET CMP0074 NEW)
+
 project(cmake_tracing_sc_example CXX)
 
 find_package(verilator HINTS $ENV{VERILATOR_ROOT} ${VERILATOR_ROOT})
@@ -45,7 +47,7 @@ set_property(
 # Add the Verilated circuit to the target
 verilate(example SYSTEMC COVERAGE TRACE
   INCLUDE_DIRS "../make_tracing_sc"
-  VERILATOR_ARGS -f ../make_tracing_sc/input.vc -Os -x-assign 0
+  VERILATOR_ARGS -f ../make_tracing_sc/input.vc -x-assign fast
   SOURCES ../make_tracing_sc/top.v)
 
 verilator_link_systemc(example)
