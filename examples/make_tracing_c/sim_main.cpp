@@ -17,11 +17,8 @@
 // Legacy function required only so linking works on Cygwin and MSVC++
 double sc_time_stamp() { return 0; }
 
-int main(int argc, char** argv, char** env) {
+int main(int argc, char** argv) {
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
-
-    // Prevent unused variable warnings
-    if (false && argc && argv && env) {}
 
     // Create logs/ directory in case we have traces to put under it
     Verilated::mkdir("logs");
@@ -119,6 +116,9 @@ int main(int argc, char** argv, char** env) {
     Verilated::mkdir("logs");
     contextp->coveragep()->write("logs/coverage.dat");
 #endif
+
+    // Final simulation summary
+    contextp->statsPrintSummary();
 
     // Return good completion status
     // Don't use exit() or destructor won't get called

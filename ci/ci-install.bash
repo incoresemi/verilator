@@ -19,15 +19,13 @@ set -x
 
 cd $(dirname "$0")/..
 
+# Avoid occasional cpan failures "Issued certificate has expired."
+export PERL_LWP_SSL_VERIFY_HOSTNAME=0
+echo "check_certificate = off" >> ~/.wgetrc
+
 fatal() {
   echo "ERROR: $(basename "$0"): $1" >&2; exit 1;
 }
-
-if [ "$CI_M32" = "0" ]; then
-  unset CI_M32
-elif [ "$CI_M32" != "1" ]; then
-  fatal "\$CI_M32 must be '0' or '1'";
-fi
 
 if [ "$CI_OS_NAME" = "linux" ]; then
   MAKE=make
@@ -53,20 +51,25 @@ if [ "$CI_BUILD_STAGE_NAME" = "build" ]; then
   # build Verilator
 
   if [ "$CI_OS_NAME" = "linux" ]; then
+    sudo apt-get update ||
     sudo apt-get update
-    sudo apt-get install libfl-dev ccache
-    if [ "$CI_RUNS_ON" != "ubuntu-22.04" ]; then
+    sudo apt-get install ccache help2man libfl-dev ||
+    sudo apt-get install ccache help2man libfl-dev
+    if [ "$CI_RUNS_ON" = "ubuntu-20.04" ]; then
       # Some conflict of libunwind verison on 22.04, can live without it for now
+      sudo apt-get install libgoogle-perftools-dev ||
       sudo apt-get install libgoogle-perftools-dev
     fi
     if [ "$CI_RUNS_ON" = "ubuntu-20.04" ] || [ "$CI_RUNS_ON" = "ubuntu-22.04" ]; then
+      sudo apt-get install libsystemc libsystemc-dev ||
       sudo apt-get install libsystemc libsystemc-dev
+    fi
+    if [ "$CI_RUNS_ON" = "ubuntu-22.04" ]; then
+      sudo apt-get install bear mold ||
+      sudo apt-get install bear mold
     fi
     if [ "$COVERAGE" = 1 ]; then
       yes yes | sudo cpan -fi Parallel::Forker
-    fi
-    if [ "$CI_M32" = 1 ]; then
-      sudo apt-get install gcc-multilib g++-multilib
     fi
   elif [ "$CI_OS_NAME" = "osx" ]; then
     brew update
@@ -86,22 +89,27 @@ elif [ "$CI_BUILD_STAGE_NAME" = "test" ]; then
   # run the tests
 
   if [ "$CI_OS_NAME" = "linux" ]; then
+    sudo apt-get update ||
     sudo apt-get update
     # libfl-dev needed for internal coverage's test runs
-    sudo apt-get install gdb gtkwave lcov libfl-dev ccache
-    if [ "$CI_RUNS_ON" = "ubuntu-20.04" ] || [ "$CI_RUNS_ON" = "ubuntu-22.04" ]; then
-      sudo apt-get install libsystemc-dev
+    sudo apt-get install gdb gtkwave lcov libfl-dev ccache jq ||
+    sudo apt-get install gdb gtkwave lcov libfl-dev ccache jq
+    # Required for test_regress/t/t_dist_attributes.pl
+    if [ "$CI_RUNS_ON" = "ubuntu-22.04" ]; then
+      sudo apt-get install python3-clang mold ||
+      sudo apt-get install python3-clang mold
     fi
-    if [ "$CI_M32" = 1 ]; then
-      sudo apt-get install lib32z1-dev gcc-multilib g++-multilib
+    if [ "$CI_RUNS_ON" = "ubuntu-20.04" ] || [ "$CI_RUNS_ON" = "ubuntu-22.04" ]; then
+      sudo apt-get install libsystemc-dev ||
+      sudo apt-get install libsystemc-dev
     fi
   elif [ "$CI_OS_NAME" = "osx" ]; then
     brew update
     # brew cask install gtkwave # fst2vcd hangs at launch, so don't bother
-    brew install ccache perl
+    brew install ccache perl jq
   elif [ "$CI_OS_NAME" = "freebsd" ]; then
     # fst2vcd fails with "Could not open '<input file>', exiting."
-    sudo pkg install -y ccache gmake perl5 python3
+    sudo pkg install -y ccache gmake perl5 python3 jq
   else
     fatal "Unknown os: '$CI_OS_NAME'"
   fi
@@ -111,6 +119,8 @@ elif [ "$CI_BUILD_STAGE_NAME" = "test" ]; then
   fi
   yes yes | sudo cpan -M $CI_CPAN_REPO -fi Parallel::Forker
   install-vcddiff
+  # Workaround -fsanitize=address crash
+  sudo sysctl -w vm.mmap_rnd_bits=28
 else
   ##############################################################################
   # Unknown build stage

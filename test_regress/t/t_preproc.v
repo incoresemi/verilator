@@ -164,7 +164,7 @@ endmodule
 //"
 
 //======================================================================
-// Check IEEE1800-2017 `pragma protect encrypted modules
+// Check IEEE 1800-2017 `pragma protect encrypted modules
 module t_lint_pragma_protected;
 
 `pragma protect begin_protected
@@ -691,6 +691,22 @@ endmodule
 // Verilog-Perl bug1668
 `define stringify(text) `"text`"
 `stringify(`NOT_DEFINED_STR)
+
+//======================================================================
+
+"""First line with "quoted"\nSecond line\
+Third line"""
+"""First line
+Second line"""
+
+`define QQQ """QQQ defform"""
+`define QQQS(x) x
+`QQQ
+`QQQS("""QQQ defval""")
+
+// string concat bug
+`define IDENTITY(arg) ``arg
+`IDENTITY("string argument")
 
 //======================================================================
 // IEEE mandated predefines

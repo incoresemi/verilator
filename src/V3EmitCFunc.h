@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -20,8 +20,10 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
-#include "V3Global.h"
 #include "V3EmitCConstInit.h"
+#include "V3Global.h"
+#include "V3MemberMap.h"
+#include "V3ThreadSafety.h"
 
 #include <algorithm>
 #include <map>
@@ -34,20 +36,22 @@ constexpr int EMITC_NUM_CONSTW = 8;
 //######################################################################
 // Emit lazy forward declarations
 
-class EmitCLazyDecls final : public VNVisitor {
+class EmitCLazyDecls final : public VNVisitorConst {
     // NODE STATE/TYPES
-    //  AstNode::user2() -> bool. Already emitted decl for symbols.
-    const VNUser2InUse m_inuser2;
+    // None allowed to support threaded emitting
 
     // MEMBERS
     std::unordered_set<string> m_emittedManually;  // Set of names already declared manually.
-    EmitCBaseVisitor& m_emitter;  // For access to file output
+    EmitCBaseVisitorConst& m_emitter;  // For access to file output
     bool m_needsBlankLine = false;  // Emit blank line if any declarations were emitted (cosmetic)
+    std::set<AstNode*> m_emitted;  // -> in set. Already emitted decl for symbols.
 
     // METHODS
+    bool declaredOnce(AstNode* nodep) { return m_emitted.insert(nodep).second; }
+
     void lazyDeclare(AstCFunc* funcp) {
         // Already declared in this compilation unit
-        if (funcp->user2SetOnce()) return;
+        if (!declaredOnce(funcp)) return;
         // Check if this kind of function is lazily declared
         if (!(funcp->isMethod() && funcp->isLoose()) && !funcp->dpiImportPrototype()) return;
         // Already declared manually
@@ -58,40 +62,38 @@ class EmitCLazyDecls final : public VNVisitor {
     }
 
     void lazyDeclareConstPoolVar(AstVar* varp) {
-        if (varp->user2SetOnce()) return;  // Already declared
+        if (!declaredOnce(varp)) return;  // Already declared
         const string nameProtect
             = m_emitter.topClassName() + "__ConstPool__" + varp->nameProtect();
-        m_emitter.puts("extern const ");
+        m_emitter.putns(varp, "extern const ");
         m_emitter.puts(varp->dtypep()->cType(nameProtect, false, false));
         m_emitter.puts(";\n");
         m_needsBlankLine = true;
     }
 
     // VISITORS
-    virtual void visit(AstNodeCCall* nodep) override {
+    void visit(AstNodeCCall* nodep) override {
         lazyDeclare(nodep->funcp());
-        iterateChildren(nodep);
+        iterateChildrenConst(nodep);
     }
 
-    virtual void visit(AstAddrOfCFunc* nodep) override {
+    void visit(AstAddrOfCFunc* nodep) override {
         lazyDeclare(nodep->funcp());
-        iterateChildren(nodep);
+        iterateChildrenConst(nodep);
     }
 
-    virtual void visit(AstVarRef* nodep) override {
+    void visit(AstVarRef* nodep) override {
         AstVar* const varp = nodep->varp();
         // Only constant pool symbols are lazy declared for now ...
-        if (EmitCBaseVisitor::isConstPoolMod(EmitCParentModule::get(varp))) {
+        if (EmitCBase::isConstPoolMod(EmitCParentModule::get(varp))) {
             lazyDeclareConstPoolVar(varp);
         }
     }
 
-    virtual void visit(AstNode* nodep) override { iterateChildrenConst(nodep); }
-
-    VL_DEBUG_FUNC;
+    void visit(AstNode* nodep) override { iterateChildrenConst(nodep); }
 
 public:
-    explicit EmitCLazyDecls(EmitCBaseVisitor& emitter)
+    explicit EmitCLazyDecls(EmitCBaseVisitorConst& emitter)
         : m_emitter(emitter) {}
     void emit(AstNode* nodep) {
         m_needsBlankLine = false;
@@ -106,31 +108,67 @@ public:
         m_emitter.puts(suffix);
         m_emitter.ensureNewLine();
     }
-    void declared(AstCFunc* nodep) { nodep->user2SetOnce(); }
-    void reset() { AstNode::user2ClearTree(); }
+    void declared(AstCFunc* nodep) { m_emitted.insert(nodep); }
+    void reset() { m_emitted.clear(); }
 };
 
-//######################################################################
-// Emit statements and math operators
+// ######################################################################
+//  Emit statements and expressions
 
 class EmitCFunc VL_NOT_FINAL : public EmitCConstInit {
-private:
+    VMemberMap m_memberMap;
     AstVarRef* m_wideTempRefp = nullptr;  // Variable that _WW macros should be setting
     int m_labelNum = 0;  // Next label number
     int m_splitSize = 0;  // # of cfunc nodes placed into output file
-    bool m_inUC = false;  // Inside an AstUCStmt or AstUCMath
-    std::vector<AstChangeDet*> m_blkChangeDetVec;  // All encountered changes in block
+    bool m_inUC = false;  // Inside an AstUCStmt or AstUCExpr
     bool m_emitConstInit = false;  // Emitting constant initializer
+
+    // State associated with processing $display style string formatting
+    struct EmitDispState final {
+        string m_format;  // "%s" and text from user
+        std::vector<char> m_argsChar;  // Format of each argument to be printed
+        std::vector<AstNode*> m_argsp;  // Each argument to be printed
+        std::vector<string> m_argsFunc;  // Function before each argument to be printed
+        EmitDispState() { clear(); }
+        void clear() {
+            m_format = "";
+            m_argsChar.clear();
+            m_argsp.clear();
+            m_argsFunc.clear();
+        }
+        void pushFormat(const string& fmt) { m_format += fmt; }
+        void pushFormat(char fmt) { m_format += fmt; }
+        void pushArg(char fmtChar, AstNode* nodep, const string& func) {
+            m_argsChar.push_back(fmtChar);
+            m_argsp.push_back(nodep);
+            m_argsFunc.push_back(func);
+        }
+    } m_emitDispState;
 
 protected:
     EmitCLazyDecls m_lazyDecls;  // Visitor for emitting lazy declarations
     bool m_useSelfForThis = false;  // Replace "this" with "vlSelf"
     const AstNodeModule* m_modp = nullptr;  // Current module being emitted
     const AstCFunc* m_cfuncp = nullptr;  // Current function being emitted
+    bool m_instantiatesOwnProcess = false;
+
+    bool constructorNeedsProcess(const AstClass* const classp) {
+        const AstNode* const newp = m_memberMap.findMember(classp, "new");
+        if (!newp) return false;
+        const AstCFunc* const ctorp = VN_CAST(newp, CFunc);
+        if (!ctorp) return false;
+        UASSERT_OBJ(ctorp->isConstructor(), ctorp, "`new` is not a constructor!");
+        return ctorp->needProcess();
+    }
+
+    bool constructorNeedsProcess(const AstNodeDType* const dtypep) {
+        if (const AstClassRefDType* const crefdtypep = VN_CAST(dtypep, ClassRefDType))
+            return constructorNeedsProcess(crefdtypep->classp());
+        return false;
+    }
 
 public:
     // METHODS
-    VL_DEBUG_FUNC;  // Declare debug()
 
     // ACCESSORS
     void splitSizeInc(int count) { m_splitSize += count; }
@@ -147,19 +185,17 @@ public:
     void displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt, bool ignore,
                     char fmtLetter);
 
-    bool emitSimpleOk(AstNodeMath* nodep);
+    bool emitSimpleOk(AstNodeExpr* nodep);
     void emitIQW(AstNode* nodep) {
         // Other abbrevs: "C"har, "S"hort, "F"loat, "D"ouble, stri"N"g
         puts(nodep->dtypep()->charIQWN());
     }
     void emitScIQW(AstVar* nodep) {
         UASSERT_OBJ(nodep->isSc(), nodep, "emitting SystemC operator on non-SC variable");
-        // clang-format off
         puts(nodep->isScBigUint() ? "SB"
              : nodep->isScUint()  ? "SU"
              : nodep->isScBv()    ? "SW"
-             : (nodep->isScQuad() ? "SQ" : "SI"));
-        // clang-format on
+                                  : (nodep->isScQuad() ? "SQ" : "SI"));
     }
     void emitDatap(AstNode* nodep) {
         // When passing to a function with va_args the compiler doesn't
@@ -168,8 +204,8 @@ public:
     }
     void emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, AstNode* rhsp,
                     AstNode* thsp);
-    void emitCCallArgs(const AstNodeCCall* nodep, const string& selfPointer);
-    void emitDereference(const string& pointer);
+    void emitCCallArgs(const AstNodeCCall* nodep, const string& selfPointer, bool inProcess);
+    void emitDereference(AstNode* nodep, const string& pointer);
     void emitCvtPackStr(AstNode* nodep);
     void emitCvtWideArray(AstNode* nodep, AstNode* fromp);
     void emitConstant(AstConst* nodep, AstVarRef* assigntop, const string& assignString);
@@ -177,38 +213,94 @@ public:
     void emitVarReset(AstVar* varp);
     string emitVarResetRecurse(const AstVar* varp, const string& varNameProtected,
                                AstNodeDType* dtypep, int depth, const string& suffix);
-    void doubleOrDetect(AstChangeDet* changep, bool& gotOne);
     void emitChangeDet();
     void emitConstInit(AstNode* initp) {
         // We should refactor emit to produce output into a provided buffer, not go through members
         // variables. That way we could just invoke the appropriate emitter as needed.
         VL_RESTORER(m_emitConstInit);
         m_emitConstInit = true;
-        iterate(initp);
+        iterateConst(initp);
+    }
+    void putCommaIterateNext(AstNode* nodep, bool comma = false) {
+        for (AstNode* subnodep = nodep; subnodep; subnodep = subnodep->nextp()) {
+            if (comma) puts(", ");
+            iterateConst(subnodep);
+            comma = true;
+        }
+    }
+    template <typename T>
+    string optionalProcArg(const T* const nodep) {
+        return (nodep && constructorNeedsProcess(nodep)) ? "vlProcess, " : "";
+    }
+    const AstCNew* getSuperNewCallRecursep(AstNode* const nodep) {
+        // Get the super.new call
+        if (!nodep) return nullptr;
+        if (const AstCNew* const cnewp = VN_CAST(nodep, CNew)) return cnewp;
+        if (const AstStmtExpr* const stmtp = VN_CAST(nodep, StmtExpr)) {
+            if (const AstCNew* const cnewp = VN_CAST(stmtp->exprp(), CNew)) return cnewp;
+        }
+        if (const AstJumpBlock* const blockp = VN_CAST(nodep, JumpBlock)) {
+            if (const AstCNew* const cnewp = getSuperNewCallRecursep(blockp->stmtsp())) {
+                return cnewp;
+            }
+        }
+        if (const AstCNew* const cnewp = getSuperNewCallRecursep(nodep->nextp())) return cnewp;
+        return nullptr;
+    }
+
+    void putConstructorSubinit(const AstClass* classp, AstCFunc* cfuncp, bool top,
+                               std::set<AstClass*>& doneClassesr) {
+        for (const AstClassExtends* extp = classp->extendsp(); extp;
+             extp = VN_AS(extp->nextp(), ClassExtends)) {
+            if (extp->classp()->useVirtualPublic()) {
+                // It's a c++ virtual class (diamond relation)
+                // Must get the subclasses initialized first
+                putConstructorSubinit(extp->classp(), cfuncp, false, doneClassesr);
+            }
+            // Diamond pattern with same base class twice?
+            if (doneClassesr.find(extp->classp()) != doneClassesr.end()) continue;
+            puts(doneClassesr.empty() ? "" : "\n    , ");
+            doneClassesr.emplace(extp->classp());
+            puts(prefixNameProtect(extp->classp()));
+            if (constructorNeedsProcess(extp->classp())) {
+                puts("(vlProcess, vlSymsp");
+            } else {
+                puts("(vlSymsp");
+            }
+            if (top) {
+                const AstCNew* const superNewCallp = getSuperNewCallRecursep(cfuncp->stmtsp());
+                UASSERT_OBJ(superNewCallp, cfuncp, "super.new call not found");
+                putCommaIterateNext(superNewCallp->argsp(), true);
+            }
+            puts(")");
+            top = false;
+        }
     }
 
     // VISITORS
     using EmitCConstInit::visit;
-    virtual void visit(AstCFunc* nodep) override {
+    void visit(AstCFunc* nodep) override {
         VL_RESTORER(m_useSelfForThis);
         VL_RESTORER(m_cfuncp);
+        VL_RESTORER(m_instantiatesOwnProcess)
         m_cfuncp = nodep;
-
-        m_blkChangeDetVec.clear();
+        m_instantiatesOwnProcess = false;
 
         splitSizeInc(nodep);
 
         puts("\n");
         m_lazyDecls.emit(nodep);
-        if (nodep->ifdef() != "") puts("#ifdef " + nodep->ifdef() + "\n");
-        if (nodep->isInline()) puts("VL_INLINE_OPT ");
+        if (nodep->ifdef() != "") putns(nodep, "#ifdef " + nodep->ifdef() + "\n");
+        if (nodep->isInline()) putns(nodep, "VL_INLINE_OPT ");
         emitCFuncHeader(nodep, m_modp, /* withScope: */ true);
 
-        // TODO perhaps better to have a new AstCCtorInit so we can pass arguments
-        // rather than requiring a string here
-        if (!nodep->ctorInits().empty()) {
-            puts(": ");
-            puts(nodep->ctorInits());
+        if (nodep->isConstructor()) {
+            const AstClass* const classp = VN_CAST(nodep->scopep()->modp(), Class);
+            if (nodep->isConstructor() && classp && classp->extendsp()) {
+                puts("\n    : ");
+                std::set<AstClass*> doneClasses;
+                putConstructorSubinit(classp, nodep, true, doneClasses /*ref*/);
+            }
         }
         puts(" {\n");
 
@@ -216,17 +308,34 @@ public:
             m_lazyDecls.declared(nodep);  // Defined here, so no longer needs declaration
             if (!nodep->isStatic()) {  // Standard prologue
                 m_useSelfForThis = true;
-                puts("if (false && vlSelf) {}  // Prevent unused\n");
+                puts("(void)vlSelf;  // Prevent unused variable warning\n");
                 if (!VN_IS(m_modp, Class)) puts(symClassAssign());
             }
         }
 
         // "+" in the debug indicates a print from the model
         puts("VL_DEBUG_IF(VL_DBG_MSGF(\"+  ");
-        for (int i = 0; i < m_modp->level(); ++i) { puts("  "); }
+        for (int i = 0; i < m_modp->level(); ++i) puts("  ");
         puts(prefixNameProtect(m_modp));
         puts(nodep->isLoose() ? "__" : "::");
         puts(nodep->nameProtect() + "\\n\"); );\n");
+
+        // Instantiate a process class if it's going to be needed somewhere later
+        nodep->forall([&](const AstNodeCCall* ccallp) -> bool {
+            if (ccallp->funcp()->needProcess()
+                && (ccallp->funcp()->isCoroutine() == VN_IS(ccallp->backp(), CAwait))) {
+                if (!nodep->needProcess() && !m_instantiatesOwnProcess) {
+                    m_instantiatesOwnProcess = true;
+                    return false;
+                }
+            }
+            return true;
+        });
+        if (m_instantiatesOwnProcess) {
+            AstNode* const vlprocp = new AstCStmt{
+                nodep->fileline(), "VlProcessRef vlProcess = std::make_shared<VlProcess>();\n"};
+            nodep->stmtsp()->addHereThisAsNext(vlprocp);
+        }
 
         for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
             if (AstVar* const varp = VN_CAST(subnodep, Var)) {
@@ -235,40 +344,64 @@ public:
         }
 
         if (nodep->initsp()) {
-            putsDecoration("// Init\n");
-            iterateAndNextNull(nodep->initsp());
+            putsDecoration(nodep, "// Init\n");
+            iterateAndNextConstNull(nodep->initsp());
         }
 
         if (nodep->stmtsp()) {
-            putsDecoration("// Body\n");
-            iterateAndNextNull(nodep->stmtsp());
+            putsDecoration(nodep, "// Body\n");
+            iterateAndNextConstNull(nodep->stmtsp());
         }
-
-        if (!m_blkChangeDetVec.empty()) emitChangeDet();
 
         if (nodep->finalsp()) {
-            putsDecoration("// Final\n");
-            iterateAndNextNull(nodep->finalsp());
+            putsDecoration(nodep, "// Final\n");
+            iterateAndNextConstNull(nodep->finalsp());
         }
-
-        if (!m_blkChangeDetVec.empty()) puts("return __req;\n");
 
         puts("}\n");
         if (nodep->ifdef() != "") puts("#endif  // " + nodep->ifdef() + "\n");
     }
 
-    virtual void visit(AstVar* nodep) override {
+    void visit(AstVar* nodep) override {
         UASSERT_OBJ(m_cfuncp, nodep, "Cannot emit non-local variable");
         emitVarDecl(nodep);
     }
 
-    virtual void visit(AstNodeAssign* nodep) override {
+    void visit(AstCvtDynArrayToPacked* nodep) override {
+        putns(nodep, "VL_DYN_TO_");
+        emitIQW(nodep);
+        const AstNodeDType* const elemDTypep = nodep->fromp()->dtypep()->subDTypep();
+        putns(elemDTypep, "<");
+        putbs(elemDTypep->cType("", false, false));
+        puts(">(");
+        iterateAndNextConstNull(nodep->fromp());
+        puts(", ");
+        putns(elemDTypep, cvtToStr(elemDTypep->widthMin()));
+        puts(")");
+    }
+
+    void visit(AstCvtUnpackArrayToPacked* nodep) override {
+        putns(nodep, "VL_UNPACK_TO_");
+        emitIQW(nodep);
+        const AstNodeDType* const elemDTypep = nodep->fromp()->dtypep()->subDTypep();
+        putns(elemDTypep, "<");
+        putbs(elemDTypep->cType("", false, false));
+        puts(",");
+        puts(cvtToStr(nodep->fromp()->dtypep()->arrayUnpackedElements()));
+        puts(">(");
+        iterateAndNextConstNull(nodep->fromp());
+        puts(", ");
+        putns(elemDTypep, cvtToStr(elemDTypep->widthMin()));
+        puts(")");
+    }
+
+    void visit(AstNodeAssign* nodep) override {
         bool paren = true;
         bool decind = false;
         bool rhs = true;
         if (AstSel* const selp = VN_CAST(nodep->lhsp(), Sel)) {
             if (selp->widthMin() == 1) {
-                putbs("VL_ASSIGNBIT_");
+                putnbs(nodep, "VL_ASSIGNBIT_");
                 emitIQW(selp->fromp());
                 if (nodep->rhsp()->isAllOnesV()) {
                     puts("O(");
@@ -276,137 +409,176 @@ public:
                 } else {
                     puts("I(");
                 }
-                iterateAndNextNull(selp->lsbp());
+                iterateAndNextConstNull(selp->lsbp());
                 puts(", ");
-                iterateAndNextNull(selp->fromp());
+                iterateAndNextConstNull(selp->fromp());
                 if (rhs) puts(", ");
             } else {
-                putbs("VL_ASSIGNSEL_");
+                putnbs(nodep, "VL_ASSIGNSEL_");
                 emitIQW(selp->fromp());
                 emitIQW(nodep->rhsp());
                 puts("(");
-                puts(cvtToStr(selp->fromp()->widthMin()) + ",");
+                putns(selp->fromp(), cvtToStr(selp->fromp()->widthMin()) + ",");
                 puts(cvtToStr(nodep->widthMin()) + ",");
-                iterateAndNextNull(selp->lsbp());
+                iterateAndNextConstNull(selp->lsbp());
                 puts(", ");
-                iterateAndNextNull(selp->fromp());
+                iterateAndNextConstNull(selp->fromp());
                 puts(", ");
             }
         } else if (const AstGetcRefN* const selp = VN_CAST(nodep->lhsp(), GetcRefN)) {
-            iterateAndNextNull(selp->lhsp());
+            iterateAndNextConstNull(selp->lhsp());
             puts(" = ");
-            putbs("VL_PUTC_N(");
-            iterateAndNextNull(selp->lhsp());
+            putnbs(selp, "VL_PUTC_N(");
+            iterateAndNextConstNull(selp->lhsp());
             puts(", ");
-            iterateAndNextNull(selp->rhsp());
+            iterateAndNextConstNull(selp->rhsp());
             puts(", ");
         } else if (AstVar* const varp = AstVar::scVarRecurse(nodep->lhsp())) {
-            putbs("VL_ASSIGN_");  // Set a systemC variable
+            putnbs(varp, "VL_ASSIGN_");  // Set a systemC variable
             emitScIQW(varp);
             emitIQW(nodep);
             puts("(");
             puts(cvtToStr(nodep->widthMin()) + ",");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(", ");
         } else if (AstVar* const varp = AstVar::scVarRecurse(nodep->rhsp())) {
-            putbs("VL_ASSIGN_");  // Get a systemC variable
+            putnbs(varp, "VL_ASSIGN_");  // Get a systemC variable
             emitIQW(nodep);
             emitScIQW(varp);
             puts("(");
             puts(cvtToStr(nodep->widthMin()) + ",");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(", ");
+        } else if (const AstCvtPackedToDynArray* const castp
+                   = VN_CAST(nodep->rhsp(), CvtPackedToDynArray)) {
+            putns(castp, "VL_ASSIGN_DYN_Q<");
+            putbs(castp->dtypep()->subDTypep()->cType("", false, false));
+            puts(">(");
+            iterateAndNextConstNull(nodep->lhsp());
+            puts(", ");
+            putns(castp->dtypep(), cvtToStr(castp->dtypep()->subDTypep()->widthMin()));
+            puts(", ");
+            puts(cvtToStr(castp->fromp()->widthMin()));
+            puts(", ");
+            rhs = false;
+            iterateAndNextConstNull(castp->fromp());
+        } else if (const AstCvtPackedToUnpackArray* const castp
+                   = VN_CAST(nodep->rhsp(), CvtPackedToUnpackArray)) {
+            putns(castp, "VL_ASSIGN_UNPACK_Q<");
+            putbs(castp->dtypep()->subDTypep()->cType("", false, false));
+            puts(", ");
+            puts(cvtToStr(castp->dtypep()->arrayUnpackedElements()));
+            puts(">(");
+            iterateAndNextConstNull(nodep->lhsp());
+            puts(", ");
+            putns(castp->dtypep(), cvtToStr(castp->dtypep()->subDTypep()->widthMin()));
+            puts(", ");
+            rhs = false;
+            iterateAndNextConstNull(castp->fromp());
         } else if (nodep->isWide() && VN_IS(nodep->lhsp(), VarRef)  //
-                   && !VN_IS(nodep->rhsp(), CMath)  //
+                   && !VN_IS(nodep->rhsp(), CExpr)  //
                    && !VN_IS(nodep->rhsp(), CMethodHard)  //
                    && !VN_IS(nodep->rhsp(), VarRef)  //
                    && !VN_IS(nodep->rhsp(), AssocSel)  //
-                   && !VN_IS(nodep->rhsp(), ArraySel)) {
+                   && !VN_IS(nodep->rhsp(), MemberSel)  //
+                   && !VN_IS(nodep->rhsp(), StructSel)  //
+                   && !VN_IS(nodep->rhsp(), ArraySel)  //
+                   && !VN_IS(nodep->rhsp(), ExprStmt)) {
             // Wide functions assign into the array directly, don't need separate assign statement
             m_wideTempRefp = VN_AS(nodep->lhsp(), VarRef);
             paren = false;
-        } else if (nodep->isWide()) {
-            putbs("VL_ASSIGN_W(");
+        } else if (nodep->isWide() && !VN_IS(nodep->dtypep()->skipRefp(), UnpackArrayDType)) {
+            putnbs(nodep, "VL_ASSIGN_W(");
             puts(cvtToStr(nodep->widthMin()) + ",");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(", ");
         } else {
             paren = false;
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(" ");
             ofp()->blockInc();
             decind = true;
             if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
-            puts("= ");
+            putns(nodep, "= ");
         }
-        if (rhs) iterateAndNextNull(nodep->rhsp());
+        if (rhs) iterateAndNextConstNull(nodep->rhsp());
         if (paren) puts(")");
         if (decind) ofp()->blockDec();
         puts(";\n");
     }
-    virtual void visit(AstAlwaysPublic*) override {}
-    virtual void visit(AstAssocSel* nodep) override {
-        iterateAndNextNull(nodep->fromp());
-        putbs(".at(");
-        AstAssocArrayDType* const adtypep = VN_AS(nodep->fromp()->dtypep(), AssocArrayDType);
+    void visit(AstAlwaysPublic*) override {}
+    void visit(AstAssocSel* nodep) override {
+        iterateAndNextConstNull(nodep->fromp());
+        putnbs(nodep, ".at(");
+        AstAssocArrayDType* const adtypep
+            = VN_AS(nodep->fromp()->dtypep()->skipRefp(), AssocArrayDType);
         UASSERT_OBJ(adtypep, nodep, "Associative select on non-associative type");
-        if (adtypep->keyDTypep()->isWide()) {
-            emitCvtWideArray(nodep->bitp(), nodep->fromp());
-        } else {
-            iterateAndNextNull(nodep->bitp());
-        }
+        iterateAndNextConstNull(nodep->bitp());
         puts(")");
     }
-    virtual void visit(AstCCall* nodep) override {
+    void visit(AstWildcardSel* nodep) override {
+        iterateAndNextConstNull(nodep->fromp());
+        putnbs(nodep, ".at(");
+        AstWildcardArrayDType* const adtypep
+            = VN_AS(nodep->fromp()->dtypep()->skipRefp(), WildcardArrayDType);
+        UASSERT_OBJ(adtypep, nodep, "Wildcard select on non-wildcard-associative type");
+        iterateAndNextConstNull(nodep->bitp());
+        puts(")");
+    }
+    void visit(AstCCall* nodep) override {
         const AstCFunc* const funcp = nodep->funcp();
         const AstNodeModule* const funcModp = EmitCParentModule::get(funcp);
+        putnbs(nodep, "");
         if (funcp->dpiImportPrototype()) {
             // Calling DPI import
-            puts(funcp->name());
+            putns(nodep, funcp->name());
         } else if (funcp->isProperMethod() && funcp->isStatic()) {
             // Call static method via the containing class
-            puts(prefixNameProtect(funcModp) + "::");
-            puts(funcp->nameProtect());
-        } else if (VN_IS(funcModp, Class) && funcModp != m_modp) {
+            putns(funcModp, prefixNameProtect(funcModp) + "::");
+            putns(nodep, funcp->nameProtect());
+        } else if (nodep->superReference()) {
             // Calling superclass method
-            puts(prefixNameProtect(funcModp) + "::");
-            puts(funcp->nameProtect());
+            putns(funcModp, prefixNameProtect(funcModp) + "::");
+            putns(nodep, funcp->nameProtect());
         } else if (funcp->isLoose()) {
             // Calling loose method
-            puts(funcNameProtect(funcp));
+            putns(nodep, funcNameProtect(funcp));
         } else {
             // Calling regular method/function
-            if (!nodep->selfPointer().empty()) {
-                emitDereference(nodep->selfPointerProtect(m_useSelfForThis));
+            if (!nodep->selfPointer().isEmpty()) {
+                emitDereference(nodep, nodep->selfPointerProtect(m_useSelfForThis));
             }
-            puts(funcp->nameProtect());
+            putns(nodep, funcp->nameProtect());
         }
-        emitCCallArgs(nodep, nodep->selfPointerProtect(m_useSelfForThis));
+        emitCCallArgs(nodep, nodep->selfPointerProtect(m_useSelfForThis), m_cfuncp->needProcess());
     }
-    virtual void visit(AstCMethodCall* nodep) override {
+    void visit(AstCMethodCall* nodep) override {
         const AstCFunc* const funcp = nodep->funcp();
         UASSERT_OBJ(!funcp->isLoose(), nodep, "Loose method called via AstCMethodCall");
-        iterate(nodep->fromp());
-        putbs("->");
-        puts(funcp->nameProtect());
-        emitCCallArgs(nodep, "");
+        iterateConst(nodep->fromp());
+        putnbs(nodep, "->");
+        putns(funcp, funcp->nameProtect());
+        emitCCallArgs(nodep, "", m_cfuncp->needProcess());
     }
-    virtual void visit(AstCNew* nodep) override {
-        bool comma = false;
-        puts("std::make_shared<" + prefixNameProtect(nodep->dtypep()) + ">(");
-        puts("vlSymsp");  // TODO make this part of argsp, and eliminate when unnecessary
-        if (nodep->argsp()) comma = true;
-        for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
-            if (comma) puts(", ");
-            iterate(subnodep);
-            comma = true;
+    void visit(AstCAwait* nodep) override {
+        putns(nodep, "co_await ");
+        iterateConst(nodep->exprp());
+    }
+    void visit(AstCNew* nodep) override {
+        if (VN_IS(nodep->dtypep(), VoidDType)) {
+            // super.new case
+            return;
         }
+        // assignment case;
+        putns(nodep, "VL_NEW(" + prefixNameProtect(nodep->dtypep()) + ", "
+                         + optionalProcArg(nodep->dtypep()) + "vlSymsp");
+        putCommaIterateNext(nodep->argsp(), true);
         puts(")");
     }
-    virtual void visit(AstCMethodHard* nodep) override {
-        iterate(nodep->fromp());
-        puts(".");
-        puts(nodep->name());
+    void visit(AstCMethodHard* nodep) override {
+        iterateConst(nodep->fromp());
+        putns(nodep, ".");
+        putns(nodep, nodep->name());
         puts("(");
         bool comma = false;
         for (AstNode* subnodep = nodep->pinsp(); subnodep; subnodep = subnodep->nextp()) {
@@ -415,37 +587,32 @@ public:
             if (VN_IS(nodep->fromp()->dtypep(), QueueDType) && subnodep->dtypep()->isWide()) {
                 emitCvtWideArray(subnodep, nodep->fromp());
             } else {
-                iterate(subnodep);
+                iterateConst(subnodep);
             }
             comma = true;
         }
         puts(")");
-        // Some are statements some are math.
-        if (nodep->isStatement()) puts(";\n");
-        UASSERT_OBJ(!nodep->isStatement() || VN_IS(nodep->dtypep(), VoidDType), nodep,
-                    "Statement of non-void data type");
     }
-    virtual void visit(AstLambdaArgRef* nodep) override { putbs(nodep->nameProtect()); }
-    virtual void visit(AstWith* nodep) override {
+    void visit(AstLambdaArgRef* nodep) override { putbs(nodep->nameProtect()); }
+    void visit(AstWith* nodep) override {
         // With uses a C++11 lambda
-        putbs("[=](");
+        putnbs(nodep, "[&](");
         if (auto* const argrefp = nodep->indexArgRefp()) {
-            putbs(argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
+            putnbs(argrefp, argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
             puts(",");
         }
         if (auto* const argrefp = nodep->valueArgRefp()) {
-            putbs(argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
+            putnbs(argrefp, argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
         }
-        // Probably fragile, V3Task may need to convert to a AstCReturn
-        puts(") { return ");
-        iterateAndNextNull(nodep->exprp());
-        puts("; }\n");
+        puts(") {\n");
+        iterateAndNextConstNull(nodep->exprp());
+        puts("}\n");
     }
-    virtual void visit(AstNodeCase* nodep) override {  // LCOV_EXCL_LINE
+    void visit(AstNodeCase* nodep) override {  // LCOV_EXCL_LINE
         // In V3Case...
         nodep->v3fatalSrc("Case statements should have been reduced out");
     }
-    virtual void visit(AstComment* nodep) override {
+    void visit(AstComment* nodep) override {
         string at;
         if (nodep->showAt()) {
             at = " at " + nodep->fileline()->ascii();
@@ -453,12 +620,12 @@ public:
             if (!v3Global.opt.protectIds()) return;
         }
         if (!(nodep->protect() && v3Global.opt.protectIds())) {
-            putsDecoration(string("// ") + nodep->name() + at + "\n");
+            putsDecoration(nodep, string{"// "} + nodep->name() + at + "\n");
         }
-        iterateChildren(nodep);
+        iterateChildrenConst(nodep);
     }
-    virtual void visit(AstCoverDecl* nodep) override {
-        puts("vlSelf->__vlCoverInsert(");  // As Declared in emitCoverageDecl
+    void visit(AstCoverDecl* nodep) override {
+        putns(nodep, "vlSelf->__vlCoverInsert(");  // As Declared in emitCoverageDecl
         puts("&(vlSymsp->__Vcoverage[");
         puts(cvtToStr(nodep->dataDeclThisp()->binNum()));
         puts("])");
@@ -485,41 +652,42 @@ public:
         putsQuoted(nodep->linescov());
         puts(");\n");
     }
-    virtual void visit(AstCoverInc* nodep) override {
-        if (v3Global.opt.threads()) {
-            puts("vlSymsp->__Vcoverage[");
+    void visit(AstCoverInc* nodep) override {
+        if (v3Global.opt.threads() > 1) {
+            putns(nodep, "vlSymsp->__Vcoverage[");
             puts(cvtToStr(nodep->declp()->dataDeclThisp()->binNum()));
             puts("].fetch_add(1, std::memory_order_relaxed);\n");
         } else {
-            puts("++(vlSymsp->__Vcoverage[");
+            putns(nodep, "++(vlSymsp->__Vcoverage[");
             puts(cvtToStr(nodep->declp()->dataDeclThisp()->binNum()));
             puts("]);\n");
         }
     }
-    virtual void visit(AstCReturn* nodep) override {
-        puts("return (");
-        iterateAndNextNull(nodep->lhsp());
+    void visit(AstDisableFork* nodep) override { putns(nodep, "vlProcess->disableFork();\n"); }
+    void visit(AstCReturn* nodep) override {
+        putns(nodep, "return (");
+        iterateAndNextConstNull(nodep->lhsp());
         puts(");\n");
     }
-    virtual void visit(AstDisplay* nodep) override {
+    void visit(AstDisplay* nodep) override {
         string text = nodep->fmtp()->text();
         if (nodep->addNewline()) text += "\n";
         displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
     }
-    virtual void visit(AstDumpCtl* nodep) override {
+    void visit(AstDumpCtl* nodep) override {
         switch (nodep->ctlType()) {
         case VDumpCtlType::FILE:
-            puts("vlSymsp->_vm_contextp__->dumpfile(");
+            putns(nodep, "vlSymsp->_vm_contextp__->dumpfile(");
             emitCvtPackStr(nodep->exprp());
             puts(");\n");
             break;
         case VDumpCtlType::VARS:
             // We ignore number of levels to dump in exprp()
             if (v3Global.opt.trace()) {
-                puts("vlSymsp->_traceDumpOpen();\n");
+                putns(nodep, "vlSymsp->_traceDumpOpen();\n");
             } else {
-                puts("VL_PRINTF_MT(\"-Info: ");
-                puts(protect(nodep->fileline()->filename()));
+                putns(nodep, "VL_PRINTF_MT(\"-Info: ");
+                puts(V3OutFormatter::quoteNameControls(protect(nodep->fileline()->filename())));
                 puts(":");
                 puts(cvtToStr(nodep->fileline()->lineno()));
                 puts(": $dumpvar ignored, as Verilated without --trace");
@@ -545,30 +713,30 @@ public:
         default: nodep->v3fatalSrc("Bad case, unexpected " << nodep->ctlType().ascii());
         }
     }
-    virtual void visit(AstScopeName* nodep) override {
+    void visit(AstScopeName* nodep) override {
         // For use under AstCCalls for dpiImports.  ScopeNames under
         // displays are handled in AstDisplay
         if (!nodep->dpiExport()) {
             // this is where the DPI import context scope is set
             const string scope = nodep->scopeDpiName();
-            putbs("(&(vlSymsp->" + protect("__Vscope_" + scope) + "))");
+            putnbs(nodep, "(&(vlSymsp->" + protect("__Vscope_" + scope) + "))");
         }
     }
-    virtual void visit(AstSFormat* nodep) override {
+    void visit(AstSFormat* nodep) override {
         displayNode(nodep, nodep->fmtp()->scopeNamep(), nodep->fmtp()->text(),
                     nodep->fmtp()->exprsp(), false);
     }
-    virtual void visit(AstSFormatF* nodep) override {
+    void visit(AstSFormatF* nodep) override {
         displayNode(nodep, nodep->scopeNamep(), nodep->text(), nodep->exprsp(), false);
     }
-    virtual void visit(AstFScanF* nodep) override {
+    void visit(AstFScanF* nodep) override {
         displayNode(nodep, nullptr, nodep->text(), nodep->exprsp(), true);
     }
-    virtual void visit(AstSScanF* nodep) override {
+    void visit(AstSScanF* nodep) override {
         displayNode(nodep, nullptr, nodep->text(), nodep->exprsp(), true);
     }
-    virtual void visit(AstValuePlusArgs* nodep) override {
-        puts("VL_VALUEPLUSARGS_IN");
+    void visit(AstValuePlusArgs* nodep) override {
+        putns(nodep, "VL_VALUEPLUSARGS_IN");
         emitIQW(nodep->outp());
         puts("(");
         puts(cvtToStr(nodep->outp()->widthMin()));
@@ -576,22 +744,27 @@ public:
         emitCvtPackStr(nodep->searchp());
         puts(", ");
         putbs("");
-        iterateAndNextNull(nodep->outp());
+        iterateAndNextConstNull(nodep->outp());
         puts(")");
     }
-    virtual void visit(AstTestPlusArgs* nodep) override {
-        puts("VL_TESTPLUSARGS_I(");
-        putsQuoted(nodep->text());
+    void visit(AstTestPlusArgs* nodep) override {
+        putns(nodep, "VL_TESTPLUSARGS_I(");
+        emitCvtPackStr(nodep->searchp());
         puts(")");
     }
-    virtual void visit(AstFError* nodep) override {
-        puts("VL_FERROR_IN(");
-        iterateAndNextNull(nodep->filep());
+    void visit(AstFError* nodep) override {
+        putns(nodep, "VL_FERROR_I");
+        puts(nodep->strp()->isString() ? "N(" : "W(");
+        iterateAndNextConstNull(nodep->filep());
         putbs(", ");
-        iterateAndNextNull(nodep->strp());
+        if (nodep->strp()->isWide()) {
+            puts(cvtToStr(nodep->strp()->widthWords()));
+            putbs(", ");
+        }
+        iterateAndNextConstNull(nodep->strp());
         puts(")");
     }
-    virtual void visit(AstFGetS* nodep) override {
+    void visit(AstFGetS* nodep) override {
         checkMaxWords(nodep);
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
     }
@@ -604,9 +777,8 @@ public:
                 << " bits exceeds hardcoded limit VL_VALUE_STRING_MAX_WORDS in verilatedos.h");
         }
     }
-    virtual void visit(AstFOpen* nodep) override {
-        iterateAndNextNull(nodep->filep());
-        puts(" = VL_FOPEN_NN(");
+    void visit(AstFOpen* nodep) override {
+        putns(nodep, "VL_FOPEN_NN(");
         emitCvtPackStr(nodep->filenamep());
         putbs(", ");
         if (nodep->modep()->width() > 4 * 8)
@@ -614,14 +786,13 @@ public:
         emitCvtPackStr(nodep->modep());
         puts(");\n");
     }
-    virtual void visit(AstFOpenMcd* nodep) override {
-        iterateAndNextNull(nodep->filep());
-        puts(" = VL_FOPEN_MCD_N(");
+    void visit(AstFOpenMcd* nodep) override {
+        putns(nodep, "VL_FOPEN_MCD_N(");
         emitCvtPackStr(nodep->filenamep());
         puts(");\n");
     }
-    virtual void visit(AstNodeReadWriteMem* nodep) override {
-        puts(nodep->cFuncPrefixp());
+    void visit(AstNodeReadWriteMem* nodep) override {
+        putns(nodep, nodep->cFuncPrefixp());
         puts("N(");
         puts(nodep->isHex() ? "true" : "false");
         putbs(", ");
@@ -652,62 +823,61 @@ public:
         {
             const bool need_ptr = !VN_IS(nodep->memp()->dtypep(), AssocArrayDType);
             if (need_ptr) puts(" &(");
-            iterateAndNextNull(nodep->memp());
+            iterateAndNextConstNull(nodep->memp());
             if (need_ptr) puts(")");
         }
         putbs(", ");
         if (nodep->lsbp()) {
-            iterateAndNextNull(nodep->lsbp());
+            iterateAndNextConstNull(nodep->lsbp());
         } else {
             puts(cvtToStr(array_lo));
         }
         putbs(", ");
         if (nodep->msbp()) {
-            iterateAndNextNull(nodep->msbp());
+            iterateAndNextConstNull(nodep->msbp());
         } else {
             puts("~0ULL");
         }
         puts(");\n");
     }
-    virtual void visit(AstFClose* nodep) override {
-        puts("VL_FCLOSE_I(");
-        iterateAndNextNull(nodep->filep());
+    void visit(AstFClose* nodep) override {
+        putns(nodep, "VL_FCLOSE_I(");
+        iterateAndNextConstNull(nodep->filep());
         puts("); ");
-        iterateAndNextNull(nodep->filep());  // For safety, so user doesn't later WRITE with it.
-        puts(" = 0;\n");
     }
-    virtual void visit(AstFFlush* nodep) override {
+    void visit(AstFFlush* nodep) override {
         if (!nodep->filep()) {
-            puts("Verilated::runFlushCallbacks();\n");
+            putns(nodep, "Verilated::runFlushCallbacks();\n");
         } else {
-            puts("if (");
-            iterateAndNextNull(nodep->filep());
-            puts(") { VL_FFLUSH_I(");
-            iterateAndNextNull(nodep->filep());
+            putns(nodep, "if (");
+            iterateAndNextConstNull(nodep->filep());
+            puts(") { ");
+            putns(nodep, "VL_FFLUSH_I(");
+            iterateAndNextConstNull(nodep->filep());
             puts("); }\n");
         }
     }
-    virtual void visit(AstFSeek* nodep) override {
-        puts("(VL_FSEEK_I(");
-        iterateAndNextNull(nodep->filep());
+    void visit(AstFSeek* nodep) override {
+        putns(nodep, "(VL_FSEEK_I(");
+        iterateAndNextConstNull(nodep->filep());
         puts(",");
-        iterateAndNextNull(nodep->offset());
+        iterateAndNextConstNull(nodep->offset());
         puts(",");
-        iterateAndNextNull(nodep->operation());
+        iterateAndNextConstNull(nodep->operation());
         puts(") == -1 ? -1 : 0)");
     }
-    virtual void visit(AstFTell* nodep) override {
-        puts("VL_FTELL_I(");
-        iterateAndNextNull(nodep->filep());
+    void visit(AstFTell* nodep) override {
+        putns(nodep, "VL_FTELL_I(");
+        iterateAndNextConstNull(nodep->filep());
         puts(")");
     }
-    virtual void visit(AstFRewind* nodep) override {
-        puts("(VL_FSEEK_I(");
-        iterateAndNextNull(nodep->filep());
+    void visit(AstFRewind* nodep) override {
+        putns(nodep, "(VL_FSEEK_I(");
+        iterateAndNextConstNull(nodep->filep());
         puts(", 0, 0) == -1 ? -1 : 0)");
     }
-    virtual void visit(AstFRead* nodep) override {
-        puts("VL_FREAD_I(");
+    void visit(AstFRead* nodep) override {
+        putns(nodep, "VL_FREAD_I(");
         puts(cvtToStr(nodep->memp()->widthMin()));  // Need real storage width
         putbs(",");
         uint32_t array_lo = 0;
@@ -731,31 +901,33 @@ public:
         puts(cvtToStr(array_size));
         putbs(", ");
         puts("&(");
-        iterateAndNextNull(nodep->memp());
+        iterateAndNextConstNull(nodep->memp());
         puts(")");
         putbs(", ");
-        iterateAndNextNull(nodep->filep());
+        iterateAndNextConstNull(nodep->filep());
         putbs(", ");
         if (nodep->startp()) {
-            iterateAndNextNull(nodep->startp());
+            iterateAndNextConstNull(nodep->startp());
         } else {
             puts(cvtToStr(array_lo));
         }
         putbs(", ");
         if (nodep->countp()) {
-            iterateAndNextNull(nodep->countp());
+            iterateAndNextConstNull(nodep->countp());
         } else {
             puts(cvtToStr(array_size));
         }
         puts(")");
     }
-    virtual void visit(AstSysFuncAsTask* nodep) override {
-        if (!nodep->lhsp()->isWide()) puts("(void)");
-        iterateAndNextNull(nodep->lhsp());
-        if (!nodep->lhsp()->isWide()) puts(";");
+    void visit(AstSysFuncAsTask* nodep) override {
+        if (!nodep->lhsp()->isWide()) putns(nodep, "(void)");
+        iterateAndNextConstNull(nodep->lhsp());
+        if (!nodep->lhsp()->isWide()) putns(nodep, ";\n");
     }
-    virtual void visit(AstSystemT* nodep) override {
-        puts("(void)VL_SYSTEM_I");
+    void visit(AstStackTraceF* nodep) override { putns(nodep, "VL_STACKTRACE_N()"); }
+    void visit(AstStackTraceT* nodep) override { putns(nodep, "VL_STACKTRACE();\n"); }
+    void visit(AstSystemT* nodep) override {
+        putns(nodep, "(void)VL_SYSTEM_I");
         emitIQW(nodep->lhsp());
         puts("(");
         if (nodep->lhsp()->isWide()) {
@@ -763,11 +935,11 @@ public:
             putbs(", ");
         }
         checkMaxWords(nodep->lhsp());
-        iterateAndNextNull(nodep->lhsp());
+        iterateAndNextConstNull(nodep->lhsp());
         puts(");\n");
     }
-    virtual void visit(AstSystemF* nodep) override {
-        puts("VL_SYSTEM_I");
+    void visit(AstSystemF* nodep) override {
+        putns(nodep, "VL_SYSTEM_I");
         emitIQW(nodep->lhsp());
         puts("(");
         if (nodep->lhsp()->isWide()) {
@@ -775,116 +947,132 @@ public:
             putbs(", ");
         }
         checkMaxWords(nodep->lhsp());
-        iterateAndNextNull(nodep->lhsp());
+        iterateAndNextConstNull(nodep->lhsp());
         puts(")");
     }
-    virtual void visit(AstJumpBlock* nodep) override {
+    void visit(AstStmtExpr* nodep) override {
+        putns(nodep, "");
+        iterateConst(nodep->exprp());
+        puts(";\n");
+    }
+    void visit(AstJumpBlock* nodep) override {
         nodep->labelNum(++m_labelNum);
-        puts("{\n");  // Make it visually obvious label jumps outside these
-        iterateAndNextNull(nodep->stmtsp());
-        iterateAndNextNull(nodep->endStmtsp());
+        putns(nodep, "{\n");  // Make it visually obvious label jumps outside these
+        iterateAndNextConstNull(nodep->stmtsp());
+        iterateAndNextConstNull(nodep->endStmtsp());
         puts("}\n");
     }
-    virtual void visit(AstJumpGo* nodep) override {
-        puts("goto __Vlabel" + cvtToStr(nodep->labelp()->blockp()->labelNum()) + ";\n");
+    void visit(AstCLocalScope* nodep) override {
+        putns(nodep, "{\n");
+        iterateAndNextConstNull(nodep->stmtsp());
+        puts("}\n");
     }
-    virtual void visit(AstJumpLabel* nodep) override {
-        puts("__Vlabel" + cvtToStr(nodep->blockp()->labelNum()) + ": ;\n");
+    void visit(AstJumpGo* nodep) override {
+        putns(nodep, "goto __Vlabel" + cvtToStr(nodep->labelp()->blockp()->labelNum()) + ";\n");
     }
-    virtual void visit(AstWhile* nodep) override {
-        iterateAndNextNull(nodep->precondsp());
-        puts("while (");
-        iterateAndNextNull(nodep->condp());
+    void visit(AstJumpLabel* nodep) override {
+        putns(nodep, "__Vlabel" + cvtToStr(nodep->blockp()->labelNum()) + ": ;\n");
+    }
+    void visit(AstWhile* nodep) override {
+        iterateAndNextConstNull(nodep->precondsp());
+        putns(nodep, "while (");
+        iterateAndNextConstNull(nodep->condp());
         puts(") {\n");
-        iterateAndNextNull(nodep->bodysp());
-        iterateAndNextNull(nodep->incsp());
-        iterateAndNextNull(nodep->precondsp());  // Need to recompute before next loop
+        iterateAndNextConstNull(nodep->stmtsp());
+        iterateAndNextConstNull(nodep->incsp());
+        iterateAndNextConstNull(nodep->precondsp());  // Need to recompute before next loop
         puts("}\n");
     }
-    virtual void visit(AstNodeIf* nodep) override {
-        puts("if (");
+    void visit(AstNodeIf* nodep) override {
+        putns(nodep, "if (");
         if (!nodep->branchPred().unknown()) {
             puts(nodep->branchPred().ascii());
             puts("(");
         }
-        iterateAndNextNull(nodep->condp());
+        iterateAndNextConstNull(nodep->condp());
         if (!nodep->branchPred().unknown()) puts(")");
         puts(") {\n");
-        iterateAndNextNull(nodep->ifsp());
+        iterateAndNextConstNull(nodep->thensp());
         puts("}");
         if (!nodep->elsesp()) {
             puts("\n");
         } else {
             if (VN_IS(nodep->elsesp(), NodeIf) && !nodep->elsesp()->nextp()) {
                 puts(" else ");
-                iterateAndNextNull(nodep->elsesp());
+                iterateAndNextConstNull(nodep->elsesp());
             } else {
                 puts(" else {\n");
-                iterateAndNextNull(nodep->elsesp());
+                iterateAndNextConstNull(nodep->elsesp());
                 puts("}\n");
             }
         }
     }
-    virtual void visit(AstExprStmt* nodep) override {
+    void visit(AstExprStmt* nodep) override {
         // GCC allows compound statements in expressions, but this is not standard.
         // So we use an immediate-evaluation lambda and comma operator
-        putbs("([&]() {\n");
-        iterateAndNextNull(nodep->stmtsp());
+        putnbs(nodep, "([&]() {\n");
+        iterateAndNextConstNull(nodep->stmtsp());
         puts("}(), ");
-        iterateAndNextNull(nodep->resultp());
+        iterateAndNextConstNull(nodep->resultp());
         puts(")");
     }
-    virtual void visit(AstStop* nodep) override {
-        puts("VL_STOP_MT(");
+    void visit(AstStop* nodep) override {
+        putns(nodep, "VL_STOP_MT(");
         putsQuoted(protect(nodep->fileline()->filename()));
         puts(", ");
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(", \"\"");
         puts(");\n");
     }
-    virtual void visit(AstFinish* nodep) override {
-        puts("VL_FINISH_MT(");
+    void visit(AstFinish* nodep) override {
+        putns(nodep, "VL_FINISH_MT(");
         putsQuoted(protect(nodep->fileline()->filename()));
         puts(", ");
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(", \"\");\n");
     }
-    virtual void visit(AstPrintTimeScale* nodep) override {
-        puts("VL_PRINTTIMESCALE(");
-        putsQuoted(protect(nodep->name()));
+    void visit(AstPrintTimeScale* nodep) override {
+        putns(nodep, "VL_PRINTTIMESCALE(");
+        putsQuoted(protect(nodep->prettyName()));
         puts(", ");
         putsQuoted(nodep->timeunit().ascii());
         puts(", vlSymsp->_vm_contextp__);\n");
     }
-    virtual void visit(AstRand* nodep) override {
+    void visit(AstRand* nodep) override {
         emitOpName(nodep, nodep->emitC(), nodep->seedp(), nullptr, nullptr);
     }
-    virtual void visit(AstTime* nodep) override {
-        puts("VL_TIME_UNITED_Q(");
-        if (nodep->timeunit().isNone()) nodep->v3fatalSrc("$time has no units");
+    void visit(AstRandRNG* nodep) override {
+        emitOpName(nodep, nodep->emitC(), nullptr, nullptr, nullptr);
+    }
+    void visit(AstTime* nodep) override {
+        putns(nodep, "VL_TIME_UNITED_Q(");
+        UASSERT_OBJ(!nodep->timeunit().isNone(), nodep, "$time has no units");
         puts(cvtToStr(nodep->timeunit().multiplier()
                       / v3Global.rootp()->timeprecision().multiplier()));
         puts(")");
     }
-    virtual void visit(AstTimeD* nodep) override {
-        puts("VL_TIME_UNITED_D(");
-        if (nodep->timeunit().isNone()) nodep->v3fatalSrc("$realtime has no units");
+    void visit(AstTimeD* nodep) override {
+        putns(nodep, "VL_TIME_UNITED_D(");
+        UASSERT_OBJ(!nodep->timeunit().isNone(), nodep, "$realtime has no units");
         puts(cvtToStr(nodep->timeunit().multiplier()
                       / v3Global.rootp()->timeprecision().multiplier()));
         puts(")");
     }
-    virtual void visit(AstTimeFormat* nodep) override {
-        puts("VL_TIMEFORMAT_IINI(");
-        iterateAndNextNull(nodep->unitsp());
+    void visit(AstTimeFormat* nodep) override {
+        putns(nodep, "VL_TIMEFORMAT_IINI(");
+        iterateAndNextConstNull(nodep->unitsp());
         puts(", ");
-        iterateAndNextNull(nodep->precisionp());
+        iterateAndNextConstNull(nodep->precisionp());
         puts(", ");
         emitCvtPackStr(nodep->suffixp());
         puts(", ");
-        iterateAndNextNull(nodep->widthp());
+        iterateAndNextConstNull(nodep->widthp());
         puts(", vlSymsp->_vm_contextp__);\n");
     }
-    virtual void visit(AstNodeSimpleText* nodep) override {
+    void visit(AstTimePrecision* nodep) override {
+        putns(nodep, "vlSymsp->_vm_contextp__->timeprecision()");
+    }
+    void visit(AstNodeSimpleText* nodep) override {
         const string text = m_inUC && m_useSelfForThis
                                 ? VString::replaceWord(nodep->text(), "this", "vlSelf")
                                 : nodep->text();
@@ -894,42 +1082,46 @@ public:
             ofp()->putsNoTracking(text);
         }
     }
-    virtual void visit(AstTextBlock* nodep) override {
+    void visit(AstTextBlock* nodep) override {
         visit(static_cast<AstNodeSimpleText*>(nodep));
         for (AstNode* childp = nodep->nodesp(); childp; childp = childp->nextp()) {
-            iterate(childp);
+            iterateConst(childp);
             if (nodep->commas() && childp->nextp()) puts(", ");
         }
     }
-    virtual void visit(AstCStmt* nodep) override {
-        putbs("");
-        iterateAndNextNull(nodep->bodysp());
+    void visit(AstCStmt* nodep) override {
+        putnbs(nodep, "");
+        iterateAndNextConstNull(nodep->exprsp());
     }
-    virtual void visit(AstCMath* nodep) override {
-        putbs("");
-        iterateAndNextNull(nodep->bodysp());
+    void visit(AstCExpr* nodep) override {
+        putnbs(nodep, "");
+        iterateAndNextConstNull(nodep->exprsp());
     }
-    virtual void visit(AstUCStmt* nodep) override {
+    void visit(AstUCStmt* nodep) override {
         VL_RESTORER(m_inUC);
         m_inUC = true;
-        putsDecoration(ifNoProtect("// $c statement at " + nodep->fileline()->ascii() + "\n"));
-        iterateAndNextNull(nodep->bodysp());
+        putnbs(nodep, "");
+        putsDecoration(nodep,
+                       ifNoProtect("// $c statement at " + nodep->fileline()->ascii() + "\n"));
+        iterateAndNextConstNull(nodep->exprsp());
         puts("\n");
     }
-    virtual void visit(AstUCFunc* nodep) override {
+    void visit(AstUCFunc* nodep) override {
         VL_RESTORER(m_inUC);
         m_inUC = true;
         puts("\n");
-        putsDecoration(ifNoProtect("// $c function at " + nodep->fileline()->ascii() + "\n"));
-        iterateAndNextNull(nodep->bodysp());
+        putnbs(nodep, "");
+        putsDecoration(nodep,
+                       ifNoProtect("// $c function at " + nodep->fileline()->ascii() + "\n"));
+        iterateAndNextConstNull(nodep->exprsp());
         puts("\n");
     }
 
     // Operators
-    virtual void visit(AstNodeTermop* nodep) override {
+    void visit(AstNodeTermop* nodep) override {
         emitOpName(nodep, nodep->emitC(), nullptr, nullptr, nullptr);
     }
-    virtual void visit(AstNodeUniop* nodep) override {
+    void visit(AstNodeUniop* nodep) override {
         if (nodep->emitCheckMaxWords()
             && (nodep->widthWords() > VL_MULS_MAX_WORDS
                 || nodep->lhsp()->widthWords() > VL_MULS_MAX_WORDS)) {
@@ -940,16 +1132,16 @@ public:
                     << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
         }
         if (emitSimpleOk(nodep)) {
-            putbs("(");
+            putnbs(nodep, "(");
             puts(nodep->emitSimpleOperator());
             puts(" ");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(")");
         } else {
             emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nullptr, nullptr);
         }
     }
-    virtual void visit(AstNodeBiop* nodep) override {
+    void visit(AstNodeBiop* nodep) override {
         if (nodep->emitCheckMaxWords() && nodep->widthWords() > VL_MULS_MAX_WORDS) {
             nodep->v3warn(
                 E_UNSUPPORTED,
@@ -958,22 +1150,23 @@ public:
                     << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
         }
         if (emitSimpleOk(nodep)) {
-            putbs("(");
-            iterateAndNextNull(nodep->lhsp());
+            putnbs(nodep, "(");
+            iterateAndNextConstNull(nodep->lhsp());
             puts(" ");
             putbs(nodep->emitSimpleOperator());
             puts(" ");
-            iterateAndNextNull(nodep->rhsp());
+            iterateAndNextConstNull(nodep->rhsp());
             puts(")");
         } else {
             emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
         }
     }
-    virtual void visit(AstNodeTriop* nodep) override {
+    void visit(AstNodeTriop* nodep) override {
         UASSERT_OBJ(!emitSimpleOk(nodep), nodep, "Triop cannot be described in a simple way");
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nodep->thsp());
     }
-    virtual void visit(AstRedXor* nodep) override {
+    void visit(AstCvtPackString* nodep) override { emitCvtPackStr(nodep->lhsp()); }
+    void visit(AstRedXor* nodep) override {
         if (nodep->lhsp()->isWide()) {
             visit(static_cast<AstNodeUniop*>(nodep));
         } else {
@@ -982,93 +1175,105 @@ public:
                                         : nodep->lhsp()->dtypep()->widthPow2();
             UASSERT_OBJ(widthPow2 > 1, nodep,
                         "Reduction over single bit value should have been folded");
-            putbs("VL_REDXOR_");
+            putnbs(nodep, "VL_REDXOR_");
             puts(cvtToStr(widthPow2));
             puts("(");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             puts(")");
         }
     }
-    virtual void visit(AstCCast* nodep) override {
+    void visit(AstCCast* nodep) override {
         // Extending a value of the same word width is just a NOP.
-        if (nodep->size() <= VL_IDATASIZE) {
-            puts("(IData)(");
+        if (const AstClassRefDType* const classDtypep = VN_CAST(nodep->dtypep(), ClassRefDType)) {
+            putns(nodep, "(" + classDtypep->cType("", false, false) + ")(");
+        } else if (nodep->size() <= VL_BYTESIZE) {
+            putns(nodep, "(CData)(");
+        } else if (nodep->size() <= VL_SHORTSIZE) {
+            putns(nodep, "(SData)(");
+        } else if (nodep->size() <= VL_IDATASIZE) {
+            putns(nodep, "(IData)(");
         } else {
-            puts("(QData)(");
+            putns(nodep, "(QData)(");
         }
-        iterateAndNextNull(nodep->lhsp());
+        iterateAndNextConstNull(nodep->lhsp());
         puts(")");
     }
-    virtual void visit(AstNodeCond* nodep) override {
+    void visit(AstNodeCond* nodep) override {
         // Widths match up already, so we'll just use C++'s operator w/o any temps.
-        if (nodep->expr1p()->isWide()) {
-            emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
+        if (nodep->thenp()->isWide()) {
+            emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->thenp(), nodep->elsep());
         } else {
-            putbs("(");
-            iterateAndNextNull(nodep->condp());
+            putnbs(nodep, "(");
+            iterateAndNextConstNull(nodep->condp());
             putbs(" ? ");
-            iterateAndNextNull(nodep->expr1p());
+            iterateAndNextConstNull(nodep->thenp());
             putbs(" : ");
-            iterateAndNextNull(nodep->expr2p());
+            iterateAndNextConstNull(nodep->elsep());
             puts(")");
         }
     }
-    virtual void visit(AstMemberSel* nodep) override {
-        iterateAndNextNull(nodep->fromp());
-        putbs("->");
+    void visit(AstMemberSel* nodep) override {
+        iterateAndNextConstNull(nodep->fromp());
+        putnbs(nodep, "->");
         puts(nodep->varp()->nameProtect());
     }
-    virtual void visit(AstNullCheck* nodep) override {
-        puts("VL_NULL_CHECK(");
-        iterateAndNextNull(nodep->lhsp());
+    void visit(AstStructSel* nodep) override {
+        iterateAndNextConstNull(nodep->fromp());
+        putnbs(nodep, ".");
+        puts(nodep->nameProtect());
+    }
+    void visit(AstNullCheck* nodep) override {
+        putns(nodep, "VL_NULL_CHECK(");
+        iterateAndNextConstNull(nodep->lhsp());
         puts(", ");
         putsQuoted(protect(nodep->fileline()->filename()));
         puts(", ");
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(")");
     }
-    virtual void visit(AstNewCopy* nodep) override {
-        puts("std::make_shared<" + prefixNameProtect(nodep->dtypep()) + ">(");
+    void visit(AstNewCopy* nodep) override {
+        putns(nodep, "VL_NEW(" + prefixNameProtect(nodep->dtypep()) + ", "
+                         + optionalProcArg(nodep->dtypep()));
         puts("*");  // i.e. make into a reference
-        iterateAndNextNull(nodep->rhsp());
+        iterateAndNextConstNull(nodep->rhsp());
         puts(")");
     }
-    virtual void visit(AstSel* nodep) override {
+    void visit(AstSel* nodep) override {
         // Note ASSIGN checks for this on a LHS
-        emitOpName(nodep, nodep->emitC(), nodep->fromp(), nodep->lsbp(), nodep->thsp());
+        emitOpName(nodep, nodep->emitC(), nodep->fromp(), nodep->lsbp(), nodep->widthp());
     }
-    virtual void visit(AstReplicate* nodep) override {
-        if (nodep->lhsp()->widthMin() == 1 && !nodep->isWide()) {
-            UASSERT_OBJ((static_cast<int>(VN_AS(nodep->rhsp(), Const)->toUInt())
-                         * nodep->lhsp()->widthMin())
+    void visit(AstReplicate* nodep) override {
+        if (nodep->srcp()->widthMin() == 1 && !nodep->isWide()) {
+            UASSERT_OBJ((static_cast<int>(VN_AS(nodep->countp(), Const)->toUInt())
+                         * nodep->srcp()->widthMin())
                             == nodep->widthMin(),
                         nodep, "Replicate non-constant or width miscomputed");
-            puts("VL_REPLICATE_");
+            putns(nodep, "VL_REPLICATE_");
             emitIQW(nodep);
             puts("OI(");
-            if (nodep->lhsp()) puts(cvtToStr(nodep->lhsp()->widthMin()));
+            if (nodep->srcp()) puts(cvtToStr(nodep->srcp()->widthMin()));
             puts(",");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->srcp());
             puts(", ");
-            iterateAndNextNull(nodep->rhsp());
+            iterateAndNextConstNull(nodep->countp());
             puts(")");
         } else {
-            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
+            emitOpName(nodep, nodep->emitC(), nodep->srcp(), nodep->countp(), nullptr);
         }
     }
-    virtual void visit(AstStreamL* nodep) override {
+    void visit(AstStreamL* nodep) override {
         // Attempt to use a "fast" stream function for slice size = power of 2
         if (!nodep->isWide()) {
             const uint32_t isPow2 = VN_AS(nodep->rhsp(), Const)->num().countOnes() == 1;
             const uint32_t sliceSize = VN_AS(nodep->rhsp(), Const)->toUInt();
             if (isPow2 && sliceSize <= (nodep->isQuad() ? sizeof(uint64_t) : sizeof(uint32_t))) {
-                puts("VL_STREAML_FAST_");
+                putns(nodep, "VL_STREAML_FAST_");
                 emitIQW(nodep);
                 emitIQW(nodep->lhsp());
                 puts("I(");
                 puts(cvtToStr(nodep->lhsp()->widthMin()));
                 puts(", ");
-                iterateAndNextNull(nodep->lhsp());
+                iterateAndNextConstNull(nodep->lhsp());
                 puts(", ");
                 const uint32_t rd_log2 = V3Number::log2b(VN_AS(nodep->rhsp(), Const)->toUInt());
                 puts(cvtToStr(rd_log2) + ")");
@@ -1078,15 +1283,15 @@ public:
         emitOpName(nodep, "VL_STREAML_%nq%lq%rq(%lw, %P, %li, %ri)", nodep->lhsp(), nodep->rhsp(),
                    nullptr);
     }
-    virtual void visit(AstCastDynamic* nodep) override {
-        putbs("VL_CAST_DYNAMIC(");
-        iterateAndNextNull(nodep->lhsp());
+    void visit(AstCastDynamic* nodep) override {
+        putnbs(nodep, "VL_CAST_DYNAMIC(");
+        iterateAndNextConstNull(nodep->fromp());
         puts(", ");
-        iterateAndNextNull(nodep->rhsp());
+        iterateAndNextConstNull(nodep->top());
         puts(")");
     }
-    virtual void visit(AstCountBits* nodep) override {
-        putbs("VL_COUNTBITS_");
+    void visit(AstCountBits* nodep) override {
+        putnbs(nodep, "VL_COUNTBITS_");
         emitIQW(nodep->lhsp());
         puts("(");
         puts(cvtToStr(nodep->lhsp()->widthMin()));
@@ -1096,42 +1301,45 @@ public:
                                                           // (which is always 32)
             puts(", ");
         }
-        iterateAndNextNull(nodep->lhsp());
+        iterateAndNextConstNull(nodep->lhsp());
         puts(", ");
-        iterateAndNextNull(nodep->rhsp());
+        iterateAndNextConstNull(nodep->rhsp());
         puts(", ");
-        iterateAndNextNull(nodep->thsp());
+        iterateAndNextConstNull(nodep->thsp());
         puts(", ");
-        iterateAndNextNull(nodep->fhsp());
+        iterateAndNextConstNull(nodep->fhsp());
         puts(")");
     }
-    virtual void visit(AstInitItem* nodep) override { iterateChildren(nodep); }
+    void visit(AstInitItem* nodep) override { iterateChildrenConst(nodep); }
     // Terminals
-    virtual void visit(AstVarRef* nodep) override {
+    void visit(AstVarRef* nodep) override {
         const AstVar* const varp = nodep->varp();
         const AstNodeModule* const varModp = EmitCParentModule::get(varp);
         if (isConstPoolMod(varModp)) {
             // Reference to constant pool variable
-            puts(topClassName() + "__ConstPool__");
+            putns(nodep, topClassName() + "__ConstPool__");
         } else if (varp->isStatic()) {
             // Access static variable via the containing class
-            puts(prefixNameProtect(varModp) + "::");
+            putns(nodep, prefixNameProtect(varModp) + "::");
         } else if (VN_IS(varModp, Class) && varModp != m_modp) {
             // Superclass member reference
-            puts(prefixNameProtect(varModp) + "::");
-        } else if (!nodep->selfPointer().empty()) {
-            emitDereference(nodep->selfPointerProtect(m_useSelfForThis));
+            putns(nodep, prefixNameProtect(varModp) + "::");
+        } else if (varp->isIfaceRef()) {
+            putns(nodep, nodep->selfPointerProtect(m_useSelfForThis));
+            return;
+        } else if (!nodep->selfPointer().isEmpty()) {
+            emitDereference(nodep, nodep->selfPointerProtect(m_useSelfForThis));
         }
-        puts(nodep->varp()->nameProtect());
+        putns(nodep, nodep->varp()->nameProtect());
     }
-    virtual void visit(AstAddrOfCFunc* nodep) override {
+    void visit(AstAddrOfCFunc* nodep) override {
         // Note: Can be thought to handle more, but this is all that is needed right now
         const AstCFunc* const funcp = nodep->funcp();
         UASSERT_OBJ(funcp->isLoose(), nodep, "Cannot take address of non-loose method");
-        puts("&");
+        putns(nodep, "&");
         puts(funcNameProtect(funcp));
     }
-    virtual void visit(AstConst* nodep) override {
+    void visit(AstConst* nodep) override {
         if (m_emitConstInit) {
             EmitCConstInit::visit(nodep);
         } else if (nodep->isWide()) {
@@ -1142,79 +1350,116 @@ public:
             emitConstant(nodep, nullptr, "");
         }
     }
+    void visit(AstThisRef* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
+        puts("{");
+        puts(m_useSelfForThis ? "vlSelf" : "this");
+        puts("}");
+    }
 
     //
-    virtual void visit(AstMTaskBody* nodep) override {
+    void visit(AstMTaskBody* nodep) override {
         VL_RESTORER(m_useSelfForThis);
         m_useSelfForThis = true;
         iterateChildrenConst(nodep);
     }
-    virtual void visit(AstConsAssoc* nodep) override {
-        putbs(nodep->dtypep()->cType("", false, false));
+    void visit(AstConsAssoc* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
         puts("()");
         if (nodep->defaultp()) {
             putbs(".setDefault(");
-            iterateAndNextNull(nodep->defaultp());
+            iterateAndNextConstNull(nodep->defaultp());
             puts(")");
         }
     }
-    virtual void visit(AstSetAssoc* nodep) override {
-        iterateAndNextNull(nodep->lhsp());
-        putbs(".set(");
-        iterateAndNextNull(nodep->keyp());
+    void visit(AstSetAssoc* nodep) override {
+        iterateAndNextConstNull(nodep->lhsp());
+        putnbs(nodep, ".set(");
+        iterateAndNextConstNull(nodep->keyp());
         puts(", ");
         putbs("");
-        iterateAndNextNull(nodep->valuep());
+        iterateAndNextConstNull(nodep->valuep());
         puts(")");
     }
-    virtual void visit(AstConsDynArray* nodep) override {
-        putbs(nodep->dtypep()->cType("", false, false));
+    void visit(AstConsWildcard* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
+        puts("()");
+        if (nodep->defaultp()) {
+            putbs(".setDefault(");
+            iterateAndNextConstNull(nodep->defaultp());
+            puts(")");
+        }
+    }
+    void visit(AstSetWildcard* nodep) override {
+        iterateAndNextConstNull(nodep->lhsp());
+        putnbs(nodep, ".set(");
+        iterateAndNextConstNull(nodep->keyp());
+        puts(", ");
+        putbs("");
+        iterateAndNextConstNull(nodep->valuep());
+        puts(")");
+    }
+    void visit(AstConsDynArray* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
         if (!nodep->lhsp()) {
-            puts("()");
+            putns(nodep, "()");
         } else {
-            puts("::cons(");
-            iterateAndNextNull(nodep->lhsp());
+            putns(nodep, "::cons(");
+            iterateAndNextConstNull(nodep->lhsp());
             if (nodep->rhsp()) {
                 puts(", ");
                 putbs("");
             }
-            iterateAndNextNull(nodep->rhsp());
+            iterateAndNextConstNull(nodep->rhsp());
             puts(")");
         }
     }
-    virtual void visit(AstConsQueue* nodep) override {
-        putbs(nodep->dtypep()->cType("", false, false));
+    void visit(AstConsPackUOrStruct* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
+        puts("{");
+        for (AstNode* memberp = nodep->membersp(); memberp; memberp = memberp->nextp()) {
+            iterateConst(memberp);
+            if (memberp->nextp()) puts(", ");
+        }
+        puts("}");
+    }
+    void visit(AstConsPackMember* nodep) override {
+        auto* const vdtypep = VN_AS(nodep->dtypep(), MemberDType);
+        putnbs(nodep, ".");
+        puts(vdtypep->name());
+        puts(" = ");
+        iterateConst(nodep->rhsp());
+    }
+    void visit(AstConsQueue* nodep) override {
+        putnbs(nodep, nodep->dtypep()->cType("", false, false));
         if (!nodep->lhsp()) {
             puts("()");
         } else {
             puts("::cons(");
-            iterateAndNextNull(nodep->lhsp());
+            iterateAndNextConstNull(nodep->lhsp());
             if (nodep->rhsp()) {
                 puts(", ");
                 putbs("");
             }
-            iterateAndNextNull(nodep->rhsp());
+            iterateAndNextConstNull(nodep->rhsp());
             puts(")");
         }
     }
-    virtual void visit(AstCReset* nodep) override {
+    void visit(AstCReset* nodep) override {
         AstVar* const varp = nodep->varrefp()->varp();
         emitVarReset(varp);
     }
-    virtual void visit(AstExecGraph* nodep) override {
+    void visit(AstExecGraph* nodep) override {
         // The location of the AstExecGraph within the containing AstCFunc is where we want to
         // invoke the graph and wait for it to complete. Emitting the children does just that.
         UASSERT_OBJ(!nodep->mTaskBodiesp(), nodep, "These should have been lowered");
         iterateChildrenConst(nodep);
     }
-    virtual void visit(AstChangeDet* nodep) override {  //
-        m_blkChangeDetVec.push_back(nodep);
-    }
 
     // Default
-    virtual void visit(AstNode* nodep) override {
-        puts(string("\n???? // ") + nodep->prettyTypeName() + "\n");
-        iterateChildren(nodep);
+    void visit(AstNode* nodep) override {
+        putns(nodep, string{"\n???? // "} + nodep->prettyTypeName() + "\n");
+        iterateChildrenConst(nodep);
         // LCOV_EXCL_START
         if (!v3Global.opt.lintOnly()) {  // An internal problem, so suppress
             nodep->v3fatalSrc("Unknown node type reached emitter: " << nodep->prettyTypeName());
@@ -1228,9 +1473,9 @@ public:
         : EmitCFunc{} {
         m_ofp = ofp;
         m_trackText = trackText;
-        iterate(nodep);
+        iterateConst(nodep);
     }
-    virtual ~EmitCFunc() override = default;
+    ~EmitCFunc() override = default;
 };
 
 #endif  // guard

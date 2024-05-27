@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -20,7 +20,9 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
+#ifndef V3ERROR_NO_GLOBAL_
 #define V3ERROR_NO_GLOBAL_
+#endif
 #include "V3Error.h"
 
 //********************************************************************
@@ -29,7 +31,6 @@
 // has hit that point with sufficient coverage.
 
 class VlcBuckets final {
-private:
     // MEMBERS
     uint64_t* m_datap = nullptr;  ///< Pointer to first bucket (dynamically allocated)
     uint64_t m_dataSize = 0;  ///< Current entries in m_datap
@@ -96,30 +97,30 @@ public:
     }
     uint64_t popCount() const {
         uint64_t pop = 0;
-        for (uint64_t i = 0; i < m_dataSize; i++) {
-            if (hits(i)) pop++;
+        for (uint64_t i = 0; i < m_dataSize; ++i) {
+            if (hits(i)) ++pop;
         }
         return pop;
     }
     uint64_t dataPopCount(const VlcBuckets& remaining) {
         uint64_t pop = 0;
-        for (uint64_t i = 0; i < m_dataSize; i++) {
-            if (hits(i) && remaining.hits(i)) pop++;
+        for (uint64_t i = 0; i < m_dataSize; ++i) {
+            if (hits(i) && remaining.hits(i)) ++pop;
         }
         return pop;
     }
     void orData(const VlcBuckets& ordata) {
-        for (uint64_t i = 0; i < m_dataSize; i++) {
+        for (uint64_t i = 0; i < m_dataSize; ++i) {
             if (hits(i) && ordata.hits(i)) clearHits(i);
         }
     }
 
     void dump() const {
-        cout << "#     ";
-        for (uint64_t i = 0; i < m_dataSize; i++) {
-            if (hits(i)) cout << "," << i;
+        std::cout << "#     ";
+        for (uint64_t i = 0; i < m_dataSize; ++i) {
+            if (hits(i)) std::cout << "," << i;
         }
-        cout << endl;
+        std::cout << "\n";
     }
 };
 

@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -33,13 +33,15 @@
 //######################################################################
 // Global string-related functions
 
-template <class T> std::string cvtToStr(const T& t) {
+template <class T>
+std::string cvtToStr(const T& t) VL_PURE {
     std::ostringstream os;
     os << t;
     return os.str();
 }
 template <class T>
-typename std::enable_if<std::is_pointer<T>::value, std::string>::type cvtToHex(const T tp) {
+typename std::enable_if<std::is_pointer<T>::value, std::string>::type
+cvtToHex(const T tp) VL_PURE {
     std::ostringstream os;
     os << static_cast<const void*>(tp);
     return os.str();
@@ -68,23 +70,23 @@ inline uint32_t cvtToHash(const void* vp) {
 }
 
 inline string ucfirst(const string& text) {
-    string out = text;
-    out[0] = toupper(out[0]);
-    return out;
+    string result = text;
+    result[0] = std::toupper(result[0]);
+    return result;
 }
 
 //######################################################################
 // VString - String manipulation
 
 class VString final {
-    static bool wildmatchi(const char* s, const char* p);
+    static bool wildmatchi(const char* s, const char* p) VL_PURE;
 
 public:
     // METHODS (generic string utilities)
     // Return true if p with ? or *'s matches s
-    static bool wildmatch(const char* s, const char* p);
+    static bool wildmatch(const char* s, const char* p) VL_PURE;
     // Return true if p with ? or *'s matches s
-    static bool wildmatch(const string& s, const string& p);
+    static bool wildmatch(const string& s, const string& p) VL_PURE;
     // Return {a}{dot}{b}, omitting dot if a or b are empty
     static string dot(const string& a, const string& dot, const string& b);
     // Convert string to lowercase (tolower)
@@ -99,14 +101,23 @@ public:
     static string quotePercent(const string& str) { return quoteAny(str, '%', '%'); }
     // Surround a raw string by double quote and escape if necessary
     // e.g. input abc's  becomes "\"abc\'s\""
+    static string escapeStringForPath(const string& str);
+    // Convert SV quoted string input from source code to normal form.
+    // Reverse is V3OutFormatter::quoteNameControls(...)
+    static string unquoteSVString(const string& text, string& errOut);
+    // Escape path in Windows
+    // e.g. input `C:\Program Files\My Program\My Program.exe` becomes
+    // `C:\\Program\ Files\\My\ Program\\My\ Program.exe`
     static string quoteStringLiteralForShell(const string& str);
     // Replace any unprintable with space
     // This includes removing tabs, so column tracking is correct
-    static string spaceUnprintable(const string& str);
+    static string spaceUnprintable(const string& str) VL_PURE;
     // Remove any whitespace
     static string removeWhitespace(const string& str);
     // Return true if only whitespace or ""
     static bool isWhitespace(const string& str);
+    // Return number of spaces/tabs leading in string
+    static string::size_type leadingWhitespaceCount(const string& str);
     // Return double by parsing string
     static double parseDouble(const string& str, bool* successp);
     // Replace all occurrences of the word 'from' in 'str' with 'to'. A word is considered
@@ -115,6 +126,13 @@ public:
     static string replaceWord(const string& str, const string& from, const string& to);
     // Predicate to check if 'str' starts with 'prefix'
     static bool startsWith(const string& str, const string& prefix);
+    // Predicate to check if 'str' ends with 'suffix'
+    static bool endsWith(const string& str, const string& suffix);
+    // Return true if char is valid character in word
+    static bool isWordChar(char c) { return isalnum(c) || c == '_'; }
+    // Return proper article (a/an) for a word. May be inaccurate for some special words
+    static string aOrAn(const char* word);
+    static string aOrAn(const string& word) { return aOrAn(word.c_str()); }
 };
 
 //######################################################################
@@ -129,8 +147,8 @@ class VHashSha256 final {
     // MEMBERS
     uint32_t m_inthash[8];  // Intermediate hash, in host order
     string m_remainder;  // Unhashed data
-    bool m_final = false;  // Finalized
     size_t m_totLength = 0;  // Total all-chunk length as needed by output digest
+    bool m_final = false;  // Finalized
 public:
     // CONSTRUCTORS
     VHashSha256() {
@@ -156,7 +174,7 @@ public:
     uint64_t digestUInt64();  // Return 64-bits of digest
     static void selfTest();  // Test this class
 
-    // Inerting hash data
+    // Inserting hash data
     void insert(const void* datap, size_t length);  // Process data into the digest
     void insert(const string& data) {
         insert(data.data(), data.length());
@@ -232,7 +250,7 @@ public:
         if (candidate.empty()) {
             return "";
         } else {
-            return string("... Suggested alternative: '") + candidate + "'";
+            return "... Suggested alternative: '"s + candidate + "'";
         }
     }
     static void selfTest();

@@ -4,8 +4,6 @@
 // any use, without warranty, 2006 by Wilson Snyder.
 // SPDX-License-Identifier: CC0-1.0
 
-`include "verilated.v"
-
 module t_case_write2_tasks ();
 
    // verilator lint_off WIDTH
@@ -2067,7 +2065,7 @@ module t_case_write2_tasks ();
          endcase
       end
    endtask
-   task ozonef3;
+   task automatic ozonef3;
       input  [  31:0] foo;
       input [`FD_BITS]    fd;
       reg                 nacho;
@@ -2482,7 +2480,7 @@ module t_case_write2_tasks ();
       $fwrite(fd," dude");
    endtask
 
-   task big_case;
+   task automatic big_case;
       input  [  `FD_BITS] fd;
       input [  31:0]  foo;
       // verilator no_inline_task

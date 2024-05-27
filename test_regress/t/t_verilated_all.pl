@@ -8,7 +8,7 @@ if (!$::Driver) { use FindBin; exec("$FindBin::Bin/bootstrap.pl", @ARGV, $0); di
 # Version 2.0.
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
-scenarios(vlt => 1);
+scenarios(vltmt => 1);
 
 my $root = "..";
 
@@ -17,12 +17,11 @@ compile(
     verilator_flags2 => ["--cc",
                          "--coverage-toggle --coverage-line --coverage-user",
                          "--trace --vpi ",
-                         ($Self->cfg_with_threaded
-                          ? "--threads 2 $root/include/verilated_threads.cpp" : ""),
-                         ($Self->cfg_with_threaded
-                          ? "--trace-threads 1" : ""),
+                         "--trace-threads 1",
+                         $Self->have_coroutines ? "--timing" : "--no-timing -Wno-STMTDLY",
                          "--prof-exec", "--prof-pgo",
                          "$root/include/verilated_save.cpp"],
+    threads => 2
     );
 
 execute(
@@ -57,8 +56,8 @@ foreach my $file (sort keys %hit) {
     if (!$hit{$file}
         && $file !~ /_sc/
         && $file !~ /_fst/
-        && $file !~ /_heavy/
-        && ($file !~ /_thread/ || $Self->cfg_with_threaded)) {
+        && ($file !~ /_timing/ || $Self->have_coroutines)
+        && ($file !~ /_thread/)) {
         error("Include file not covered by t_verilated_all test: ", $file);
     }
 }

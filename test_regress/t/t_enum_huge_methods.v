@@ -4,8 +4,9 @@
 // any use, without warranty, 2014 by Wilson Snyder.
 // SPDX-License-Identifier: CC0-1.0
 
-`define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); $stop; end while(0);
-`define checks(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv), (expv)); $stop; end while(0);
+`define stop $stop
+`define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
+`define checks(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
 
 module t (/*AUTOARG*/
    // Inputs
@@ -34,25 +35,35 @@ module t (/*AUTOARG*/
       else if (cyc == 1) begin
          `checks(e.name, "E01");
          `checkh(e.next, ELARGE);
+         `checkh(e.next(0), E01);
+         `checkh(e.prev(0), E01);
          e <= ELARGE;
       end
       else if (cyc == 3) begin
          `checks(e.name, "ELARGE");
          `checkh(e.next, E01);
          `checkh(e.prev, E01);
+         `checkh(e.next(0), ELARGE);
+         `checkh(e.prev(0), ELARGE);
          e <= E01;
       end
       //
       else if (cyc == 10) begin
+         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1234);
+         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 11) begin
          `checkh(i_cast, 0);
+         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1);
+         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 12) begin
          `checkh(i_cast, 1);
+         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1234_4567_abcd);
+         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 13) begin
          `checkh(i_cast, 1);

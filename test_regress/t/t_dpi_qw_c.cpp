@@ -9,9 +9,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //*************************************************************************
 
+#include "svdpi.h"
+
 #include <cstdio>
 #include <cstring>
-#include "svdpi.h"
 
 //======================================================================
 
@@ -32,7 +33,7 @@ void poke_value(int i) {
     const char* const scopeNamep = svGetNameFromScope(svGetScope());
     printf("svGetNameFromScope=\"%s\"\n", scopeNamep);
 
-// clang-format off
+    // clang-format off
 #ifdef VERILATOR
     static int didDump = 0;
     if (didDump++ == 0) {

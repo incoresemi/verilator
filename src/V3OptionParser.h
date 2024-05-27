@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -20,6 +20,8 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
+#include "V3ThreadSafety.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -29,8 +31,8 @@
 class VOptionBool;
 #endif
 
-// Typycal usage would look as below.
-// See also V3Options::parseOptsList() in V3Optoins.cpp for more detailed usage.
+// Typical usage would look as below.
+// See also V3Options::parseOptsList() in V3Options.cpp for more detailed usage.
 //
 //    V3OptionParser parser;
 //    V3OptionParser::AppendHelper DECL_OPTION{parser};
@@ -43,7 +45,7 @@ class VOptionBool;
 //        if (int consumed = parser.parse(i, argc, argv)) {
 //            i += consumed;
 //        } else {  // error
-//            cerr << parser.getSuggestion(argv[i]) << endl;
+//            std::cerr << parser.getSuggestion(argv[i]) << std::endl;
 //        }
 //    }
 //
@@ -64,30 +66,35 @@ private:
     const std::unique_ptr<Impl> m_pimpl;
 
     // METHODS
-    ActionIfs* find(const char* optp);
-    template <class ACT, class ARG> ActionIfs& add(const string& opt, ARG arg);
-    static bool hasPrefixNo(const char* strp);  // Returns true if strp starts with "-no"
+    ActionIfs* find(const char* optp) VL_MT_DISABLED;
+    template <class ACT, class ARG>
+    ActionIfs& add(const string& opt, ARG arg) VL_MT_DISABLED;
+    // Returns true if strp starts with "-fno"
+    static bool hasPrefixFNo(const char* strp) VL_MT_DISABLED;
+    // Returns true if strp starts with "-no"
+    static bool hasPrefixNo(const char* strp) VL_MT_DISABLED;
 
 public:
     // METHODS
     // Returns how many args are consumed. 0 means not match
-    int parse(int idx, int argc, char* argv[]);
+    int parse(int idx, int argc, char* argv[]) VL_MT_DISABLED;
     // Find the most similar option
-    string getSuggestion(const char* str) const;
-    void addSuggestionCandidate(const string& s);
+    string getSuggestion(const char* str) const VL_MT_DISABLED;
+    void addSuggestionCandidate(const string& s) VL_MT_DISABLED;
     // Call this function after all options are registered.
-    void finalize();
+    void finalize() VL_MT_DISABLED;
 
     // CONSTRUCTORS
-    V3OptionParser();
-    ~V3OptionParser();
+    V3OptionParser() VL_MT_DISABLED;
+    ~V3OptionParser() VL_MT_DISABLED;
 };
 
 class V3OptionParser::ActionIfs VL_NOT_FINAL {
 public:
     virtual ~ActionIfs() = default;
     virtual bool isValueNeeded() const = 0;  // Need val of "-opt val"
-    virtual bool isOnOffAllowed() const = 0;  // true if "-no-opt" is allowd
+    virtual bool isFOnOffAllowed() const = 0;  // true if "-fno-opt" is allowed
+    virtual bool isOnOffAllowed() const = 0;  // true if "-no-opt" is allowed
     virtual bool isPartialMatchAllowed() const = 0;  // true if "-Wno-" matches "-Wno-fatal"
     virtual bool isUndocumented() const = 0;  // Will not be suggested in typo
     // Set a value or run callback
@@ -101,41 +108,50 @@ class V3OptionParser::AppendHelper final {
 public:
     // TYPES
     // Tag to specify which operator() to call
-    struct Set {};  // For ActionSet
+    struct FOnOff {};  // For ActionFOnOff
     struct OnOff {};  // For ActionOnOff
+    struct Set {};  // For ActionSet
+
     struct CbCall {};  // For ActionCbCall
-    struct CbOnOff {};  // For ActionOnOff
-    struct CbVal {};  // For ActionCbVal
+    struct CbFOnOff {};  // For ActionCbFOnOff
+    struct CbOnOff {};  // For ActionCbOnOff
     struct CbPartialMatch {};  // For ActionCbPartialMatch
     struct CbPartialMatchVal {};  // For ActionCbPartialMatchVal
+    struct CbVal {};  // For ActionCbVal
 
 private:
     // MEMBERS
-    V3OptionParser& m_parser;  // The actual option registory
+    V3OptionParser& m_parser;  // The actual option registry
 
 public:
     // METHODS
-    ActionIfs& operator()(const char* optp, Set, bool*) const;
+    ActionIfs& operator()(const char* optp, Set, bool*) const VL_MT_DISABLED;
 #ifndef V3OPTION_PARSER_NO_VOPTION_BOOL
-    ActionIfs& operator()(const char* optp, Set, VOptionBool*) const;
+    ActionIfs& operator()(const char* optp, Set, VOptionBool*) const VL_MT_DISABLED;
 #endif
-    ActionIfs& operator()(const char* optp, Set, int*) const;
-    ActionIfs& operator()(const char* optp, Set, string*) const;
+    ActionIfs& operator()(const char* optp, Set, int*) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, Set, string*) const VL_MT_DISABLED;
 
-    ActionIfs& operator()(const char* optp, OnOff, bool*) const;
+    ActionIfs& operator()(const char* optp, FOnOff, bool*) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, OnOff, bool*) const VL_MT_DISABLED;
 #ifndef V3OPTION_PARSER_NO_VOPTION_BOOL
-    ActionIfs& operator()(const char* optp, OnOff, VOptionBool*) const;
+    ActionIfs& operator()(const char* optp, OnOff, VOptionBool*) const VL_MT_DISABLED;
 #endif
 
-    ActionIfs& operator()(const char* optp, CbCall, std::function<void(void)>) const;
-    ActionIfs& operator()(const char* optp, CbOnOff, std::function<void(bool)>) const;
-    ActionIfs& operator()(const char* optp, CbVal, std::function<void(int)>) const;
-    ActionIfs& operator()(const char* optp, CbVal, std::function<void(const char*)>) const;
+    ActionIfs& operator()(const char* optp, CbCall,
+                          std::function<void(void)>) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, CbFOnOff,
+                          std::function<void(bool)>) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, CbOnOff,
+                          std::function<void(bool)>) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, CbVal, std::function<void(int)>) const VL_MT_DISABLED;
+    ActionIfs& operator()(const char* optp, CbVal,
+                          std::function<void(const char*)>) const VL_MT_DISABLED;
 
     ActionIfs& operator()(const char* optp, CbPartialMatch,
-                          std::function<void(const char*)>) const;
+                          std::function<void(const char*)>) const VL_MT_DISABLED;
     ActionIfs& operator()(const char* optp, CbPartialMatchVal,
-                          std::function<void(const char*, const char*)>) const;
+                          std::function<void(const char*, const char*)>) const VL_MT_DISABLED;
 
     // CONSTRUCTORS
     explicit AppendHelper(V3OptionParser& parser)
@@ -144,13 +160,15 @@ public:
 
 #define V3OPTION_PARSER_DECL_TAGS \
     const auto Set VL_ATTR_UNUSED = V3OptionParser::AppendHelper::Set{}; \
+    const auto FOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::FOnOff{}; \
     const auto OnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::OnOff{}; \
     const auto CbCall VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbCall{}; \
+    const auto CbFOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbFOnOff{}; \
     const auto CbOnOff VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbOnOff{}; \
-    const auto CbVal VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbVal{}; \
     const auto CbPartialMatch VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbPartialMatch{}; \
     const auto CbPartialMatchVal VL_ATTR_UNUSED \
-        = V3OptionParser::AppendHelper::CbPartialMatchVal {}
+        = V3OptionParser::AppendHelper::CbPartialMatchVal{}; \
+    const auto CbVal VL_ATTR_UNUSED = V3OptionParser::AppendHelper::CbVal{};
 
 //######################################################################
 

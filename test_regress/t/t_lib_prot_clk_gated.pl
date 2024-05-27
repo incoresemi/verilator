@@ -11,10 +11,7 @@ if (!$::Driver) { use FindBin; exec("$FindBin::Bin/bootstrap.pl", @ARGV, $0); di
 # Version 2.0.
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
-scenarios(
-    vlt => 1,
-    xsim => 1,
-    );
+scenarios(vlt => 1, xsim => 1);
 
 $Self->{sim_time} = $Self->{benchmark} * 100 if $Self->{benchmark};
 
@@ -29,6 +26,7 @@ while (1) {
     run(logfile => "$secret_dir/vlt_compile.log",
         cmd => ["perl",
                 "$ENV{VERILATOR_ROOT}/bin/verilator",
+                '--no-timing',
                 "--prefix",
                 "Vt_lib_prot_secret",
                 "-cc",
@@ -54,6 +52,7 @@ while (1) {
 
     compile(
         verilator_flags2 => ["$secret_dir/secret.sv",
+                             '--no-timing',
                              "-GGATED_CLK=1",
                              "-LDFLAGS",
                              "$secret_prefix/libsecret.a"],

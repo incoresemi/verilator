@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -17,8 +17,9 @@
 // CHEAT!
 #define V3NUMBER_ASCII_BINARY
 #define V3ERROR_NO_GLOBAL_
+#define VL_MT_DISABLED_CODE_UNIT 1
 
-#include <config_build.h>
+#include "config_build.h"
 #include "verilatedos.h"
 
 #include "V3Error.cpp"
@@ -34,12 +35,12 @@ void test(const string& lhss, const string& op, const string& rhss, const string
     char* r1 = strdup(rhss.c_str());
     char* e1 = strdup(exps.c_str());
 
-    const FileLine fl = new FileLine(FileLine::builtInFinename());
+    const FileLine fl = new FileLine{FileLine::builtInFinename()};
 
-    V3Number lhnum(fl, l1);
-    V3Number rhnum(fl, r1);
-    V3Number expnum(fl, e1);
-    V3Number gotnum(fl, expnum.width());
+    V3Number lhnum{fl, l1};
+    V3Number rhnum{fl, r1};
+    V3Number expnum{fl, e1};
+    V3Number gotnum{fl, expnum.width()};
 
     if (op == "redOr") {
         gotnum.opRedOr(lhnum);
@@ -109,7 +110,7 @@ void test(const string& lhss, const string& op, const string& rhss, const string
                  << "     = " << expnum << endl
                  << "    =? " << gotnum << endl);
 
-    V3Number ok(fl, 1);
+    V3Number ok{fl, 1};
     ok.opCaseEq(expnum, gotnum);
     if (ok.toUInt() != 1) v3fatalSrc("%Error:Test FAILED");
 
@@ -137,7 +138,7 @@ int main() {
     test("99'h7FFFFFFFFFFFFFFFFFFFFFFFF", "*", "99'h0000000000000000091338A80",
          "99'h7FFFFFFFFFFFFFFFF6ECC7580");
 
-    cout << "Test completed\n";
+    std::cout << "Test completed\n";
 }
 
 //###################################################################

@@ -7,7 +7,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -27,6 +27,7 @@
 #include <map>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 //######################################################################
 // GraphStream
@@ -39,8 +40,8 @@
 // not generally safe. If you want a raw pointer compare, see
 // GraphStreamUnordered below.
 
-template <class T_Compare> class GraphStream {
-private:
+template <class T_Compare>
+class GraphStream final {
     // TYPES
     class VxHolder final {
     public:
@@ -103,32 +104,25 @@ public:
         , m_last{m_readyVertices.end()}
         , m_way{way} {
         uint32_t pos = 0;
-        for (const V3GraphVertex* vxp = graphp->verticesBeginp(); vxp;
-             vxp = vxp->verticesNextp()) {
+        for (const V3GraphVertex& vtx : graphp->vertices()) {
             // Every vertex initially is waiting, or ready.
             if (way == GraphWay::FORWARD) {
-                if (vxp->inEmpty()) {
-                    const VxHolder newVx(vxp, pos++, 0);
+                if (vtx.inEmpty()) {
+                    const VxHolder newVx{&vtx, pos++, 0};
                     m_readyVertices.insert(newVx);
                 } else {
-                    uint32_t depCount = 0;
-                    for (V3GraphEdge* depp = vxp->inBeginp(); depp; depp = depp->inNextp()) {
-                        ++depCount;
-                    }
-                    const VxHolder newVx(vxp, pos++, depCount);
-                    m_waitingVertices.emplace(vxp, newVx);
+                    const uint32_t depCount = vtx.inEdges().size();
+                    const VxHolder newVx{&vtx, pos++, depCount};
+                    m_waitingVertices.emplace(&vtx, newVx);
                 }
             } else {  // REVERSE
-                if (vxp->outEmpty()) {
-                    const VxHolder newVx(vxp, pos++, 0);
+                if (vtx.outEmpty()) {
+                    const VxHolder newVx{&vtx, pos++, 0};
                     m_readyVertices.insert(newVx);
                 } else {
-                    uint32_t depCount = 0;
-                    for (V3GraphEdge* depp = vxp->outBeginp(); depp; depp = depp->outNextp()) {
-                        ++depCount;
-                    }
-                    const VxHolder newVx(vxp, pos++, depCount);
-                    m_waitingVertices.emplace(vxp, newVx);
+                    const uint32_t depCount = vtx.outEdges().size();
+                    const VxHolder newVx{&vtx, pos++, depCount};
+                    m_waitingVertices.emplace(&vtx, newVx);
                 }
             }
         }
@@ -195,8 +189,8 @@ public:
 private:
     void unblockDeps(const V3GraphVertex* vertexp) {
         if (m_way == GraphWay::FORWARD) {
-            for (V3GraphEdge* edgep = vertexp->outBeginp(); edgep; edgep = edgep->outNextp()) {
-                const V3GraphVertex* const toVertexp = edgep->top();
+            for (const V3GraphEdge& edgep : vertexp->outEdges()) {
+                const V3GraphVertex* const toVertexp = edgep.top();
 
                 const auto it = m_waitingVertices.find(toVertexp);
                 UASSERT_OBJ(it != m_waitingVertices.end(), toVertexp,
@@ -207,8 +201,8 @@ private:
                 }
             }
         } else {
-            for (V3GraphEdge* edgep = vertexp->inBeginp(); edgep; edgep = edgep->inNextp()) {
-                const V3GraphVertex* const fromVertexp = edgep->fromp();
+            for (const V3GraphEdge& edge : vertexp->inEdges()) {
+                const V3GraphVertex* const fromVertexp = edge.fromp();
 
                 const auto it = m_waitingVertices.find(fromVertexp);
                 UASSERT_OBJ(it != m_waitingVertices.end(), fromVertexp,
@@ -224,11 +218,76 @@ private:
     VL_UNCOPYABLE(GraphStream);
 };
 
-//######################################################################
+//=================================================================================================
+// GraphStreamUnordered is similar to GraphStream, but iterates un-ordered vertices (those that are
+// not ordered by dependencies) in an arbitrary order. Iteration order is still deterministic.
 
-// GraphStreamUnordered is GraphStream using a plain pointer compare to
-// break ties in the graph order. This WILL return nodes in
-// nondeterministic order.
-using GraphStreamUnordered = GraphStream<std::less<const V3GraphVertex*>>;
+class GraphStreamUnordered final {
+    // MEMBERS
+    const GraphWay m_way;  // Direction of traversal
+    size_t m_nextIndex = 0;  // Which index to return from m_nextVertices next
+    std::vector<const V3GraphVertex*> m_nextVertices;  // List of ready vertices returned next
+    std::vector<const V3GraphVertex*> m_readyVertices;  // List of other ready vertices
+
+public:
+    // CONSTRUCTORS
+    VL_UNCOPYABLE(GraphStreamUnordered);
+    explicit GraphStreamUnordered(V3Graph* graphp, GraphWay way = GraphWay::FORWARD)
+        : m_way{way} {
+        if (m_way == GraphWay::FORWARD) {
+            init<GraphWay::FORWARD>(graphp);
+        } else {
+            init<GraphWay::REVERSE>(graphp);
+        }
+    }
+    ~GraphStreamUnordered() = default;
+
+    // METHODS
+
+    // Each call to nextp() returns a unique vertex in the graph, in dependency order. Dependencies
+    // alone do not specify a total ordering. Un-ordered vertices are returned in an arbitrary but
+    // deterministic order.
+    const V3GraphVertex* nextp() {
+        if (VL_UNLIKELY(m_nextIndex == m_nextVertices.size())) {
+            if (VL_UNLIKELY(m_readyVertices.empty())) return nullptr;
+            m_nextIndex = 0;
+            // Use swap to avoid reallocation
+            m_nextVertices.swap(m_readyVertices);
+            m_readyVertices.clear();
+        }
+        const V3GraphVertex* const resultp = m_nextVertices[m_nextIndex++];
+        if (m_way == GraphWay::FORWARD) {
+            return unblock<GraphWay::FORWARD>(resultp);
+        } else {
+            return unblock<GraphWay::REVERSE>(resultp);
+        }
+    }
+
+private:
+    template <uint8_t T_Way>  //
+    VL_ATTR_NOINLINE void init(V3Graph* graphp) {
+        constexpr GraphWay way{T_Way};
+        // Assign every vertex without an incoming edge to ready, others to waiting
+        for (V3GraphVertex& vertex : graphp->vertices()) {
+            const uint32_t nDeps = vertex.edges<way.invert()>().size();
+            vertex.color(nDeps);  // Using color instead of user, as user might be used by client
+            if (VL_UNLIKELY(nDeps == 0)) m_nextVertices.push_back(&vertex);
+        }
+    }
+
+    template <uint8_t T_Way>  //
+    VL_ATTR_NOINLINE const V3GraphVertex* unblock(const V3GraphVertex* resultp) {
+        constexpr GraphWay way{T_Way};
+        for (const V3GraphEdge& edge : resultp->edges<way>()) {
+            V3GraphVertex* const vertexp = edge.furtherp<way>();
+#if VL_DEBUG
+            UASSERT_OBJ(vertexp->color() != 0, vertexp, "Should not be on waiting list");
+#endif
+            vertexp->color(vertexp->color() - 1);
+            if (!vertexp->color()) m_readyVertices.push_back(vertexp);
+        }
+        return resultp;  // Returning input so we can tail call this method
+    }
+};
 
 #endif  // Guard

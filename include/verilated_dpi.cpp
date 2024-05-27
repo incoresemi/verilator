@@ -3,7 +3,7 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2009-2022 by Wilson Snyder. This program is free software; you can
+// Copyright 2009-2024 by Wilson Snyder. This program is free software; you can
 // redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -28,7 +28,9 @@
 #define VERILATOR_VERILATED_DPI_CPP_
 
 #include "verilatedos.h"
+
 #include "verilated_dpi.h"
+
 #include "verilated_imp.h"
 
 // On MSVC++ we need svdpi.h to declare exports, not imports
@@ -179,7 +181,7 @@ void svPutPartselLogic(svLogicVecVal* dp, const svLogicVecVal s, int lbit, int w
 //======================================================================
 // Open array internals
 
-static inline const VerilatedDpiOpenVar* _vl_openhandle_varp(const svOpenArrayHandle h) {
+static const VerilatedDpiOpenVar* _vl_openhandle_varp(const svOpenArrayHandle h) VL_MT_SAFE {
     if (VL_UNLIKELY(!h)) {
         VL_FATAL_MT(__FILE__, __LINE__, "",
                     "%%Error: DPI svOpenArrayHandle function called with nullptr handle");
@@ -221,7 +223,7 @@ int svSizeOfArray(const svOpenArrayHandle h) {
 // Open array access internals
 
 static void* _vl_sv_adjusted_datap(const VerilatedDpiOpenVar* varp, int nargs, int indx1,
-                                   int indx2, int indx3) {
+                                   int indx2, int indx3) VL_MT_SAFE {
     void* datap = varp->datap();
     if (VL_UNLIKELY(nargs != varp->udims())) {
         VL_SVDPI_WARN_("%%Warning: DPI svOpenArrayHandle function called on"
@@ -766,6 +768,36 @@ int svGetCallerInfo(const char** fileNamepp, int* lineNumberp) {
     if (VL_LIKELY(fileNamepp)) *fileNamepp = Verilated::dpiFilenamep();  // thread local
     if (VL_LIKELY(lineNumberp)) *lineNumberp = Verilated::dpiLineno();  // thread local
     return true;
+}
+
+//======================================================================
+// Time
+
+int svGetTime(const svScope scope, svTimeVal* time) {
+    if (VL_UNLIKELY(!time)) return -1;
+    const QData qtime = VL_TIME_Q();
+    VlWide<2> itime;
+    VL_SET_WQ(itime, qtime);
+    time->low = itime[0];
+    time->high = itime[1];
+    return 0;
+}
+
+int svGetTimeUnit(const svScope scope, int32_t* time_unit) {
+    if (VL_UNLIKELY(!time_unit)) return -1;
+    const VerilatedScope* const vscopep = reinterpret_cast<const VerilatedScope*>(scope);
+    if (!vscopep) {  // Null asks for global, not unlikely
+        *time_unit = Verilated::threadContextp()->timeunit();
+    } else {
+        *time_unit = vscopep->timeunit();
+    }
+    return 0;
+}
+
+int svGetTimePrecision(const svScope scope, int32_t* time_precision) {
+    if (VL_UNLIKELY(!time_precision)) return -1;
+    *time_precision = Verilated::threadContextp()->timeprecision();
+    return 0;
 }
 
 //======================================================================

@@ -3,7 +3,7 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2001-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -22,8 +22,10 @@
 //=============================================================================
 
 #include "verilatedos.h"
-#include "verilated.h"
+
 #include "verilated_cov.h"
+
+#include "verilated.h"
 #include "verilated_cov_key.h"
 
 #include <deque>
@@ -69,22 +71,23 @@ public:  // But only local to this file
 // This isn't in the header file for auto-magic conversion because it
 // inlines to too much code and makes compilation too slow.
 
-template <class T> class VerilatedCoverItemSpec final : public VerilatedCovImpItem {
+template <class T>
+class VerilatedCoverItemSpec final : public VerilatedCovImpItem {
 private:
     // MEMBERS
     T* m_countp;  // Count value
 public:
     // METHODS
     // cppcheck-suppress truncLongCastReturn
-    virtual uint64_t count() const override { return *m_countp; }
-    virtual void zero() const override { *m_countp = 0; }
+    uint64_t count() const override { return *m_countp; }
+    void zero() const override { *m_countp = 0; }
     // CONSTRUCTORS
     // cppcheck-suppress noExplicitConstructor
     explicit VerilatedCoverItemSpec(T* countp)
         : m_countp{countp} {
         *m_countp = 0;
     }
-    virtual ~VerilatedCoverItemSpec() override = default;
+    ~VerilatedCoverItemSpec() override = default;
 };
 
 //=============================================================================
@@ -103,6 +106,7 @@ private:
     using ItemList = std::deque<VerilatedCovImpItem*>;
 
     // MEMBERS
+    VerilatedContext* const m_contextp;  // Context VerilatedCovImp is pointed-to by
     mutable VerilatedMutex m_mutex;  // Protects all members
     ValueIndexMap m_valueIndexes VL_GUARDED_BY(m_mutex);  // Unique arbitrary value for values
     IndexValueMap m_indexValues VL_GUARDED_BY(m_mutex);  // Unique arbitrary value for keys
@@ -117,12 +121,13 @@ private:
 
 public:
     // CONSTRUCTORS
-    VerilatedCovImp() = default;
+    explicit VerilatedCovImp(VerilatedContext* contextp)
+        : m_contextp{contextp} {}
     VL_UNCOPYABLE(VerilatedCovImp);
 
 protected:
     friend class VerilatedCovContext;
-    virtual ~VerilatedCovImp() override { clearGuts(); }
+    ~VerilatedCovImp() override { clearGuts(); }
 
 private:
     // PRIVATE METHODS
@@ -163,11 +168,11 @@ private:
                                          const std::string& value) VL_PURE {
         std::string name;
         if (key.length() == 1 && std::isalpha(key[0])) {
-            name += std::string{"\001"} + key;
+            name += "\001"s + key;
         } else {
-            name += std::string{"\001"} + dequote(key);
+            name += "\001"s + dequote(key);
         }
-        name += std::string{"\002"} + dequote(value);
+        name += "\002"s + dequote(value);
         return name;
     }
     static std::string combineHier(const std::string& old, const std::string& add) VL_PURE {
@@ -205,11 +210,11 @@ private:
         // Forward to . so we have a whole word
         const std::string suffix = *bpost ? std::string{bpost + 1} : "";
 
-        const std::string out = prefix + "*" + suffix;
+        std::string result = prefix + "*" + suffix;
 
-        // cout << "\nch pre="<<prefix<<"  s="<<suffix<<"\nch a="<<old<<"\nch b="<<add
-        // <<"\ncho="<<out<<endl;
-        return out;
+        // std::cout << "\nch pre=" << prefix << "  s=" << suffix << "\nch a="
+        // << old << "\nch b=" << add << "\ncho=" << result << "\n";
+        return result;
     }
     bool itemMatchesString(VerilatedCovImpItem* itemp, const std::string& match)
         VL_REQUIRES(m_mutex) {
@@ -250,6 +255,7 @@ private:
 
 public:
     // PUBLIC METHODS
+    std::string defaultFilename() VL_MT_SAFE { return m_contextp->coverageFilename(); }
     void forcePerInstance(const bool flag) VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
@@ -299,7 +305,7 @@ public:
         // First two key/vals are filename
         ckeyps[0] = "filename";
         valps[0] = m_insertFilenamep;
-        const std::string linestr = vlCovCvtToStr(m_insertLineno);
+        const std::string linestr = std::to_string(m_insertLineno);
         ckeyps[1] = "lineno";
         valps[1] = linestr.c_str();
         // Default page if not specified
@@ -313,7 +319,7 @@ public:
         valps[2] = page_default.c_str();
 
         // Keys -> strings
-        std::string keys[VerilatedCovConst::MAX_KEYS];
+        std::array<std::string, VerilatedCovConst::MAX_KEYS> keys;
         for (int i = 0; i < VerilatedCovConst::MAX_KEYS; ++i) {
             if (ckeyps[i] && ckeyps[i][0]) keys[i] = ckeyps[i];
         }
@@ -334,7 +340,7 @@ public:
             const std::string key = keys[i];
             if (!keys[i].empty()) {
                 const std::string val = valps[i];
-                // cout<<"   "<<__FUNCTION__<<"  "<<key<<" = "<<val<<endl;
+                // std::cout << "   " << __FUNCTION__ << "  " << key << " = " << val << "\n";
                 m_insertp->m_keys[addKeynum] = valueIndex(key);
                 m_insertp->m_vals[addKeynum] = valueIndex(val);
                 ++addKeynum;
@@ -351,17 +357,14 @@ public:
         m_insertp = nullptr;
     }
 
-    void write(const char* filename) VL_MT_SAFE_EXCLUDES(m_mutex) {
+    void write(const std::string& filename) VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
-#ifndef VM_COVERAGE
-        VL_FATAL_MT("", 0, "", "%Error: Called VerilatedCov::write when VM_COVERAGE disabled");
-#endif
         selftest();
 
         std::ofstream os{filename};
         if (os.fail()) {
-            const std::string msg = std::string{"%Error: Can't write '"} + filename + "'";
+            const std::string msg = "%Error: Can't write '"s + filename + "'";
             VL_FATAL_MT("", 0, "", msg.c_str());
             return;
         }
@@ -426,6 +429,7 @@ public:
 //=============================================================================
 // VerilatedCovContext
 
+std::string VerilatedCovContext::defaultFilename() VL_MT_SAFE { return impp()->defaultFilename(); }
 void VerilatedCovContext::forcePerInstance(bool flag) VL_MT_SAFE {
     impp()->forcePerInstance(flag);
 }
@@ -434,7 +438,9 @@ void VerilatedCovContext::clearNonMatch(const char* matchp) VL_MT_SAFE {
     impp()->clearNonMatch(matchp);
 }
 void VerilatedCovContext::zero() VL_MT_SAFE { impp()->zero(); }
-void VerilatedCovContext::write(const char* filenamep) VL_MT_SAFE { impp()->write(filenamep); }
+void VerilatedCovContext::write(const std::string& filename) VL_MT_SAFE {
+    impp()->write(filename);
+}
 void VerilatedCovContext::_inserti(uint32_t* itemp) VL_MT_SAFE {
     impp()->inserti(new VerilatedCoverItemSpec<uint32_t>{itemp});
 }
@@ -484,8 +490,8 @@ void VerilatedCovContext::_insertp(A(0), A(1), A(2), A(3), A(4), A(5), A(6), A(7
 // Backward compatibility for Verilator
 void VerilatedCovContext::_insertp(A(0), A(1), K(2), int val2, K(3), int val3, K(4),
                                    const std::string& val4, A(5), A(6), A(7)) VL_MT_SAFE {
-    std::string val2str = vlCovCvtToStr(val2);
-    std::string val3str = vlCovCvtToStr(val3);
+    const std::string val2str = std::to_string(val2);
+    const std::string val3str = std::to_string(val3);
     _insertp(C(0), C(1), key2, val2str.c_str(), key3, val3str.c_str(), key4, val4.c_str(), C(5),
              C(6), C(7), N(8), N(9), N(10), N(11), N(12), N(13), N(14), N(15), N(16), N(17), N(18),
              N(19), N(20), N(21), N(22), N(23), N(24), N(25), N(26), N(27), N(28), N(29));
@@ -511,10 +517,12 @@ VerilatedCovContext* VerilatedCov::threadCovp() VL_MT_SAFE {
 
 VerilatedCovContext* VerilatedContext::coveragep() VL_MT_SAFE {
     static VerilatedMutex s_mutex;
+    // cppcheck-suppress identicalInnerCondition
     if (VL_UNLIKELY(!m_coveragep)) {
         const VerilatedLockGuard lock{s_mutex};
-        if (VL_LIKELY(!m_coveragep)) {  // Not redundant, prevents race
-            m_coveragep.reset(new VerilatedCovImp);
+        // cppcheck-suppress identicalInnerCondition
+        if (VL_LIKELY(!m_coveragep)) {  // LCOV_EXCL_LINE // Not redundant, prevents race
+            m_coveragep.reset(new VerilatedCovImp{this});
         }
     }
     return reinterpret_cast<VerilatedCovContext*>(m_coveragep.get());

@@ -6,15 +6,11 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder.  This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
+// can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
-//
-// Verilator is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
 
@@ -23,14 +19,15 @@
 
 #include "verilatedos.h"
 
-#include "V3Global.h"
+#include "V3Options.h"
+#include "V3ThreadSafety.h"
 
 #include <map>
 #include <set>
 #include <string>
-#include <utility>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 class AstNetlist;
@@ -60,14 +57,13 @@ private:
 
     // METHODS
     VL_UNCOPYABLE(V3HierBlock);
-    static StrGParams stringifyParams(const GParams& gparams, bool forGOption);
+    static StrGParams stringifyParams(const GParams& gparams, bool forGOption) VL_MT_DISABLED;
 
 public:
     V3HierBlock(const AstNodeModule* modp, const GParams& gparams)
         : m_modp{modp}
         , m_gparams{gparams} {}
-    ~V3HierBlock();
-    VL_DEBUG_FUNC;  // Declare debug()
+    ~V3HierBlock() VL_MT_DISABLED;
 
     void addParent(V3HierBlock* parentp) { m_parents.insert(parentp); }
     void addChild(V3HierBlock* childp) { m_children.insert(childp); }
@@ -78,24 +74,24 @@ public:
     const AstNodeModule* modp() const { return m_modp; }
 
     // For emitting Makefile and CMakeLists.txt
-    V3StringList commandArgs(bool forCMake) const;
-    V3StringList hierBlockArgs() const;
-    string hierPrefix() const;
-    string hierSomeFile(bool withDir, const char* prefix, const char* suffix) const;
-    string hierWrapper(bool withDir) const;
-    string hierMk(bool withDir) const;
-    string hierLib(bool withDir) const;
-    string hierGenerated(bool withDir) const;
+    V3StringList commandArgs(bool forCMake) const VL_MT_DISABLED;
+    V3StringList hierBlockArgs() const VL_MT_DISABLED;
+    string hierPrefix() const VL_MT_DISABLED;
+    string hierSomeFile(bool withDir, const char* prefix, const char* suffix) const VL_MT_DISABLED;
+    string hierWrapper(bool withDir) const VL_MT_DISABLED;
+    string hierMk(bool withDir) const VL_MT_DISABLED;
+    string hierLib(bool withDir) const VL_MT_DISABLED;
+    string hierGenerated(bool withDir) const VL_MT_DISABLED;
     // Returns the original HDL file if it is not included in v3Global.opt.vFiles().
-    string vFileIfNecessary() const;
-    // Write command line argumuents to .f file for this hierarchical block
-    void writeCommandArgsFile(bool forCMake) const;
-    string commandArgsFileName(bool forCMake) const;
+    string vFileIfNecessary() const VL_MT_DISABLED;
+    // Write command line arguments to .f file for this hierarchical block
+    void writeCommandArgsFile(bool forCMake) const VL_MT_DISABLED;
+    string commandArgsFileName(bool forCMake) const VL_MT_DISABLED;
 };
 
 //######################################################################
 
-// Holds relashonship between AstNodeModule and V3HierBlock
+// Holds relationship between AstNodeModule and V3HierBlock
 class V3HierBlockPlan final {
     using HierMap = std::unordered_map<const AstNodeModule*, V3HierBlock*>;
     HierMap m_blocks;
@@ -107,11 +103,9 @@ public:
     using iterator = HierMap::iterator;
     using const_iterator = HierMap::const_iterator;
     using HierVector = std::vector<const V3HierBlock*>;
-    VL_DEBUG_FUNC;  // Declare debug()
 
-    bool isHierBlock(const AstNodeModule* modp) const;
-    void add(const AstNodeModule* modp, const std::vector<AstVar*>& gparams);
-    void registerUsage(const AstNodeModule* parentp, const AstNodeModule* childp);
+    void add(const AstNodeModule* modp, const std::vector<AstVar*>& gparams) VL_MT_DISABLED;
+    void registerUsage(const AstNodeModule* parentp, const AstNodeModule* childp) VL_MT_DISABLED;
 
     const_iterator begin() const { return m_blocks.begin(); }
     const_iterator end() const { return m_blocks.end(); }
@@ -119,13 +113,13 @@ public:
 
     // Returns all hierarchical blocks that sorted in leaf-first order.
     // Latter block refers only already appeared hierarchical blocks.
-    HierVector hierBlocksSorted() const;
+    HierVector hierBlocksSorted() const VL_MT_DISABLED;
 
     // Write command line arguments to .f files for child Verilation run
-    void writeCommandArgsFiles(bool forCMake) const;
-    static string topCommandArgsFileName(bool forCMake);
+    void writeCommandArgsFiles(bool forCMake) const VL_MT_DISABLED;
+    static string topCommandArgsFileName(bool forCMake) VL_MT_DISABLED;
 
-    static void createPlan(AstNetlist* nodep);
+    static void createPlan(AstNetlist* nodep) VL_MT_DISABLED;
 };
 
 #endif  // guard

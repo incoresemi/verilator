@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2022 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -72,19 +72,19 @@
 //
 //*************************************************************************
 
-#include "config_build.h"
-#include "verilatedos.h"
+#include "V3PchAstNoMT.h"  // VL_MT_DISABLED_CODE_UNIT
 
-#include "V3Global.h"
 #include "V3MergeCond.h"
-#include "V3Stats.h"
-#include "V3Ast.h"
+
 #include "V3AstUserAllocator.h"
-#include "V3Hasher.h"
 #include "V3DupFinder.h"
+#include "V3Hasher.h"
+#include "V3Stats.h"
 
 #include <queue>
 #include <set>
+
+VL_DEFINE_DEBUG_FUNCTIONS;
 
 namespace {
 
@@ -132,10 +132,10 @@ bool areDisjoint(const std::set<const AstVar*>& a, const std::set<const AstVar*>
 //######################################################################
 // Structure containing information required for code motion/merging
 
-struct StmtProperties {
-    AstNode* m_condp = nullptr;  // The condition expression, if a conditional node
+struct StmtProperties final {
+    AstNodeExpr* m_condp = nullptr;  // The condition expression, if a conditional node
     std::set<const AstVar*> m_rdVars;  // Variables read by this statement
-    std::set<const AstVar*> m_wrVars;  // Variables writen by this statement
+    std::set<const AstVar*> m_wrVars;  // Variables written by this statement
     bool m_isFence = false;  // Nothing should move across this statement, nor should it be merged
     AstNodeStmt* m_prevWithSameCondp = nullptr;  // Previous node in same list, with same condition
     bool writesConditionVar() const {
@@ -155,15 +155,14 @@ using StmtPropertiesAllocator = AstUser3Allocator<AstNodeStmt, StmtProperties>;
 
 // Pure analysis visitor that build the StmtProperties for each statement in the given
 // AstNode list (following AstNode::nextp())
-class CodeMotionAnalysisVisitor final : public VNVisitor {
+class CodeMotionAnalysisVisitor final : public VNVisitorConst {
     // NODE STATE
     // AstNodeStmt::user3   -> StmtProperties (accessed via m_stmtProperties, managed externally,
     //                         see MergeCondVisitor::process)
+    // AstNodeExpr::user3   -> AstNodeStmt*: Set on a condition node, points to the last
+    //                         conditional with that condition so far encountered in the same
+    //                         AstNode list
     // AstNode::user4       -> Used by V3Hasher
-    // AstNode::user5       -> AstNode*: Set on a condition node, points to the last conditional
-    //                         with that condition so far encountered in the same AstNode list
-
-    VNUser5InUse m_user5InUse;
 
     StmtPropertiesAllocator& m_stmtProperties;
 
@@ -174,9 +173,9 @@ class CodeMotionAnalysisVisitor final : public VNVisitor {
     std::vector<V3DupFinder> m_stack;
     StmtProperties* m_propsp = nullptr;  // StmtProperties structure of current AstNodeStmt
 
-    // Extract condition expression from a megeable conditional statement, if any
-    static AstNode* extractCondition(const AstNodeStmt* nodep) {
-        AstNode* conditionp = nullptr;
+    // Extract condition expression from a mergeable conditional statement, if any
+    static AstNodeExpr* extractCondition(const AstNodeStmt* nodep) {
+        AstNodeExpr* conditionp = nullptr;
         if (const AstNodeAssign* const assignp = VN_CAST(nodep, NodeAssign)) {
             if (AstNodeCond* const conditionalp = extractCondFromRhs(assignp->rhsp())) {
                 conditionp = conditionalp->condp();
@@ -196,7 +195,7 @@ class CodeMotionAnalysisVisitor final : public VNVisitor {
         m_propsp = &m_stmtProperties(nodep);
 
         // Extract condition from statement
-        if (AstNode* const condp = extractCondition(nodep)) {
+        if (AstNodeExpr* const condp = extractCondition(nodep)) {
             // Remember condition node. We always need this as it is used in the later
             // traversal.
             m_propsp->m_condp = condp;
@@ -212,19 +211,19 @@ class CodeMotionAnalysisVisitor final : public VNVisitor {
                     // First time seeing this condition in the current list
                     dupFinder.insert(condp);
                     // Remember last statement with this condition (which is this statement)
-                    condp->user5p(nodep);
+                    condp->user3p(nodep);
                 } else {
                     // Seen a conditional with the same condition earlier in the current list
-                    AstNode* const firstp = dit->second;
+                    AstNodeExpr* const firstp = VN_AS(dit->second, NodeExpr);
                     // Add to properties for easy retrieval during optimization
-                    m_propsp->m_prevWithSameCondp = static_cast<AstNodeStmt*>(firstp->user5p());
+                    m_propsp->m_prevWithSameCondp = static_cast<AstNodeStmt*>(firstp->user3p());
                     // Remember last statement with this condition (which is this statement)
-                    firstp->user5p(nodep);
+                    firstp->user3p(nodep);
                 }
             }
         }
 
-        // Analyse this statement
+        // Analyze this statement
         analyzeNode(nodep);
 
         // If there is an enclosing statement, propagate properties upwards
@@ -262,7 +261,7 @@ class CodeMotionAnalysisVisitor final : public VNVisitor {
             if (!singletonListStart) m_stack.emplace_back(m_hasher);
         }
 
-        // Analyse node
+        // Analyze node
         if (AstNodeStmt* const stmtp = VN_CAST(nodep, NodeStmt)) {
             analyzeStmt(stmtp, /*tryCondMatch:*/ !singletonListStart);
         } else if (AstVarRef* const vrefp = VN_CAST(nodep, VarRef)) {
@@ -282,7 +281,7 @@ class CodeMotionAnalysisVisitor final : public VNVisitor {
     }
 
 public:
-    // Analyse the statement list starting at nodep, filling in stmtProperties.
+    // Analyze the statement list starting at nodep, filling in stmtProperties.
     static void analyze(AstNode* nodep, StmtPropertiesAllocator& stmtProperties) {
         CodeMotionAnalysisVisitor{nodep, stmtProperties};
     }
@@ -414,7 +413,7 @@ public:
     // Given an AstNode list (held via AstNode::nextp()), move conditional statements as close
     // together as possible
     static AstNode* optimize(AstNode* nodep, const StmtPropertiesAllocator& stmtProperties) {
-        CodeMotionOptimizeVisitor{nodep, stmtProperties};
+        { CodeMotionOptimizeVisitor{nodep, stmtProperties}; }
         // It is possible for the head of the list to be moved later such that it is no longer
         // in head position. If so, rewind the list and return the new head.
         while (nodep->backp()->nextp() == nodep) nodep = nodep->backp();
@@ -426,25 +425,25 @@ public:
 // Conditional merging
 
 class MergeCondVisitor final : public VNVisitor {
-private:
     // NODE STATE
     // AstVar::user1        -> bool: Set for variables referenced by m_mgCondp
     //                         (Only below MergeCondVisitor::process).
-    // AstNode::user2       -> bool: Marking node as included in merge because cheap to
-    //                         duplicate
+    // AstNode::user2       -> bool: Marking node as included in merge because cheap to duplicate
     //                         (Only below MergeCondVisitor::process).
     // AstNodeStmt::user3   -> StmtProperties
     //                         (Only below MergeCondVisitor::process).
+    // AstNodeExpr::user3   -> See CodeMotionAnalysisVisitor
+    //                         (Only below MergeCondVisitor::process).
     // AstNode::user4       -> See CodeMotionAnalysisVisitor/CodeMotionOptimizeVisitor
-    // AstNode::user5       -> See CodeMotionAnalysisVisitor
 
     // STATE
     VDouble0 m_statMerges;  // Statistic tracking
     VDouble0 m_statMergedItems;  // Statistic tracking
+    VDouble0 m_statCandidateItems;  // Statistic tracking
     VDouble0 m_statLongestList;  // Statistic tracking
 
     AstNode* m_mgFirstp = nullptr;  // First node in merged sequence
-    AstNode* m_mgCondp = nullptr;  // The condition of the first node
+    AstNodeExpr* m_mgCondp = nullptr;  // The condition of the first node
     const AstNode* m_mgLastp = nullptr;  // Last node in merged sequence
     const AstNode* m_mgNextp = nullptr;  // Next node in list being examined
     uint32_t m_listLenght = 0;  // Length of current list
@@ -454,7 +453,6 @@ private:
     StmtPropertiesAllocator* m_stmtPropertiesp = nullptr;
 
     // METHODS
-    VL_DEBUG_FUNC;  // Declare debug()
 
     // Function that processes a whole sub-tree
     void process(AstNode* nodep) {
@@ -477,17 +475,22 @@ private:
             AstNode* currp = m_workQueuep->front();
             m_workQueuep->pop();
 
-            // Analyse sub-tree list for code motion
+            // Analyze sub-tree list for code motion and conditional merging
             CodeMotionAnalysisVisitor::analyze(currp, stmtProperties);
             // Perform the code motion within the whole sub-tree list
-            currp = CodeMotionOptimizeVisitor::optimize(currp, stmtProperties);
+            if (v3Global.opt.fMergeCondMotion()) {
+                currp = CodeMotionOptimizeVisitor::optimize(currp, stmtProperties);
+            }
 
             // Merge conditionals in the whole sub-tree list (this might create new work items)
             iterateAndNextNull(currp);
 
             // Close pending merge, if there is one at the end of the whole sub-tree list
             if (m_mgFirstp) mergeEnd();
+            m_stmtPropertiesp = nullptr;
         } while (!m_workQueuep->empty());
+
+        m_workQueuep = nullptr;
     }
 
     // Skip past AstArraySel and AstWordSel with const index
@@ -562,7 +565,7 @@ private:
             return false;
         }
         if (const AstNodeCond* const condp = VN_CAST(nodep, NodeCond)) {
-            return yieldsOneOrZero(condp->expr1p()) && yieldsOneOrZero(condp->expr2p());
+            return yieldsOneOrZero(condp->thenp()) && yieldsOneOrZero(condp->elsep());
         }
         if (const AstCCast* const castp = VN_CAST(nodep, CCast)) {
             // Cast never sign extends
@@ -574,37 +577,37 @@ private:
     // Apply (1'b1 & _) cleaning mask if necessary. This is required because this pass is after
     // V3Clean, and sometimes we have an AstAnd with a 1-bit condition on one side, but a more
     // than 1-bit value on the other side, so we need to keep only the LSB.
-    static AstNode* maskLsb(AstNode* nodep) {
+    static AstNodeExpr* maskLsb(AstNodeExpr* nodep) {
         if (yieldsOneOrZero(nodep)) return nodep;
         // Otherwise apply masking
-        AstNode* const maskp = new AstConst{nodep->fileline(), AstConst::BitTrue()};
+        AstConst* const maskp = new AstConst{nodep->fileline(), AstConst::BitTrue{}};
         // Mask on left, as conventional
         return new AstAnd{nodep->fileline(), maskp, nodep};
     }
 
     // Fold the RHS expression of an assignment assuming the given condition state.
-    // Unlink bits from the RHS which is only used once, and can be reused (is an unomdified
+    // Unlink bits from the RHS which is only used once, and can be reused (is an unmodified
     // sub-tree). What remains of the RHS is expected to be deleted by the caller.
-    AstNode* foldAndUnlink(AstNode* rhsp, bool condTrue) {
+    AstNodeExpr* foldAndUnlink(AstNodeExpr* rhsp, bool condTrue) {
         if (rhsp->sameTree(m_mgCondp)) {
             return new AstConst{rhsp->fileline(), AstConst::BitTrue{}, condTrue};
         } else if (const AstNodeCond* const condp = extractCondFromRhs(rhsp)) {
-            AstNode* const resp
-                = condTrue ? condp->expr1p()->unlinkFrBack() : condp->expr2p()->unlinkFrBack();
+            AstNodeExpr* const resp
+                = condTrue ? condp->thenp()->unlinkFrBack() : condp->elsep()->unlinkFrBack();
             if (condp == rhsp) return resp;
             if (const AstAnd* const andp = VN_CAST(rhsp, And)) {
                 UASSERT_OBJ(andp->rhsp() == condp, rhsp, "Should not try to fold this");
-                return new AstAnd{andp->fileline(), andp->lhsp()->cloneTree(false), resp};
+                return new AstAnd{andp->fileline(), andp->lhsp()->cloneTreePure(false), resp};
             }
         } else if (const AstAnd* const andp = VN_CAST(rhsp, And)) {
             if (andp->lhsp()->sameTree(m_mgCondp)) {
                 return condTrue ? maskLsb(andp->rhsp()->unlinkFrBack())
-                                : new AstConst{rhsp->fileline(), AstConst::BitFalse()};
+                                : new AstConst{rhsp->fileline(), AstConst::BitFalse{}};
             } else {
                 UASSERT_OBJ(andp->rhsp()->sameTree(m_mgCondp), rhsp,
                             "AstAnd doesn't hold condition expression");
                 return condTrue ? maskLsb(andp->lhsp()->unlinkFrBack())
-                                : new AstConst{rhsp->fileline(), AstConst::BitFalse()};
+                                : new AstConst{rhsp->fileline(), AstConst::BitFalse{}};
             }
         } else if (VN_IS(rhsp, ArraySel) || VN_IS(rhsp, WordSel) || VN_IS(rhsp, VarRef)
                    || VN_IS(rhsp, Const)) {
@@ -613,6 +616,7 @@ private:
         // LCOV_EXCL_START
         if (debug()) rhsp->dumpTree("Don't know how to fold expression: ");
         rhsp->v3fatalSrc("Should not try to fold this during conditional merging");
+        return nullptr;
         // LCOV_EXCL_STOP
     }
 
@@ -647,7 +651,7 @@ private:
 
             // We need a copy of the condition in the new equivalent 'if' statement,
             // and we also need to keep track of it for comparisons later.
-            m_mgCondp = m_mgCondp->cloneTree(false);
+            m_mgCondp = m_mgCondp->cloneTreePure(false);
             // Create equivalent 'if' statement and insert it before the first node
             AstIf* const resultp = new AstIf{m_mgCondp->fileline(), m_mgCondp};
             m_mgFirstp->addHereThisAsNext(resultp);
@@ -667,13 +671,13 @@ private:
                 ++m_statMergedItems;
                 if (AstNodeAssign* const assignp = VN_CAST(currp, NodeAssign)) {
                     // Unlink RHS and clone to get the 2 assignments (reusing assignp)
-                    AstNode* const rhsp = assignp->rhsp()->unlinkFrBack();
+                    AstNodeExpr* const rhsp = assignp->rhsp()->unlinkFrBack();
                     AstNodeAssign* const thenp = assignp;
                     AstNodeAssign* const elsep = assignp->cloneTree(false);
                     // Construct the new RHSs and add to branches
                     thenp->rhsp(foldAndUnlink(rhsp, true));
                     elsep->rhsp(foldAndUnlink(rhsp, false));
-                    resultp->addIfsp(thenp);
+                    resultp->addThensp(thenp);
                     resultp->addElsesp(elsep);
                     // Cleanup
                     VL_DO_DANGLING(rhsp->deleteTree(), rhsp);
@@ -681,8 +685,8 @@ private:
                     AstNodeIf* const ifp = VN_AS(currp, NodeIf);
                     UASSERT_OBJ(ifp, currp, "Must be AstNodeIf");
                     // Move branch contents under new if
-                    if (AstNode* const listp = ifp->ifsp()) {
-                        resultp->addIfsp(listp->unlinkFrBackWithNext());
+                    if (AstNode* const listp = ifp->thensp()) {
+                        resultp->addThensp(listp->unlinkFrBackWithNext());
                     }
                     if (AstNode* const listp = ifp->elsesp()) {
                         resultp->addElsesp(listp->unlinkFrBackWithNext());
@@ -692,7 +696,7 @@ private:
                 }
             } while (nextp);
             // Merge the branches of the resulting AstIf after re-analysis
-            if (resultp->ifsp()) m_workQueuep->push(resultp->ifsp());
+            if (resultp->thensp()) m_workQueuep->push(resultp->thensp());
             if (resultp->elsesp()) m_workQueuep->push(resultp->elsesp());
         } else if (AstNodeIf* const ifp = VN_CAST(m_mgFirstp, NodeIf)) {
             // There was nothing to merge this AstNodeIf with, so try to merge its branches.
@@ -708,10 +712,11 @@ private:
         AstNode::user2ClearTree();
         // Merge recursively within the branches of an un-merged AstNodeIF
         if (recursivep) {
-            iterateAndNextNull(recursivep->ifsp());
+            iterateAndNextNull(recursivep->thensp());
             iterateAndNextNull(recursivep->elsesp());
             // Close a pending merge to ensure merge state is
             // reset as expected at the end of this function
+            // cppcheck-has-bug-suppress knownConditionTrueFalse
             if (m_mgFirstp) mergeEnd();
         }
     }
@@ -735,12 +740,12 @@ private:
         return false;
     }
 
-    bool addToList(AstNodeStmt* nodep, AstNode* condp) {
+    bool addToList(AstNodeStmt* nodep, AstNodeExpr* condp) {
         // Set up head of new list if node is first in list
         if (!m_mgFirstp) {
             UASSERT_OBJ(condp, nodep, "Cannot start new list without condition");
             // Mark variable references in the condition
-            condp->foreach<AstVarRef>([](const AstVarRef* nodep) { nodep->varp()->user1(1); });
+            condp->foreach([](const AstVarRef* nodep) { nodep->varp()->user1(1); });
             // Now check again if mergeable. We need this to pick up assignments to conditions,
             // e.g.: 'c = c ? a : b' at the beginning of the list, which is in fact not mergeable
             // because it updates the condition. We simply bail on these.
@@ -780,14 +785,18 @@ private:
         m_mgNextp = nodep->nextp();
         // If last under parent, done with current list
         if (!m_mgNextp) mergeEnd();
+        // Statistics
+        ++m_statCandidateItems;
         // We did add to the list
         return true;
     }
 
     // If this node is the next expected node and is helpful to add to the list, do so,
-    // otherwise end the current merge. Return ture if added, false if ended merge.
+    // otherwise end the current merge. Return true if added, false if ended merge.
     bool addIfHelpfulElseEndMerge(AstNodeStmt* nodep) {
         UASSERT_OBJ(m_mgFirstp, nodep, "List must be open");
+        if (!checkOrMakeMergeable(nodep)) return false;
+        if (!m_mgFirstp) return false;  // If 'checkOrMakeMergeable' closed the list
         if (m_mgNextp == nodep) {
             if (isSimplifiableNode(nodep)) {
                 if (addToList(nodep, nullptr)) return true;
@@ -818,8 +827,8 @@ private:
     }
 
     // VISITORS
-    virtual void visit(AstNodeAssign* nodep) override {
-        if (AstNode* const condp = (*m_stmtPropertiesp)(nodep).m_condp) {
+    void visit(AstNodeAssign* nodep) override {
+        if (AstNodeExpr* const condp = (*m_stmtPropertiesp)(nodep).m_condp) {
             // Check if mergeable
             if (!checkOrMakeMergeable(nodep)) return;
             // Close potentially incompatible pending merge
@@ -831,11 +840,11 @@ private:
         }
     }
 
-    virtual void visit(AstNodeIf* nodep) override {
+    void visit(AstNodeIf* nodep) override {
         // Check if mergeable
         if (!checkOrMakeMergeable(nodep)) {
             // If not mergeable, try to merge the branches
-            iterateAndNextNull(nodep->ifsp());
+            iterateAndNextNull(nodep->thensp());
             iterateAndNextNull(nodep->elsesp());
             return;
         }
@@ -845,26 +854,27 @@ private:
         addToList(nodep, nodep->condp());
     }
 
-    virtual void visit(AstNodeStmt* nodep) override {
+    void visit(AstNodeStmt* nodep) override {
         if (m_mgFirstp && addIfHelpfulElseEndMerge(nodep)) return;
         iterateChildren(nodep);
     }
 
-    virtual void visit(AstCFunc* nodep) override {
+    void visit(AstCFunc* nodep) override {
         // Merge function body
         if (nodep->stmtsp()) process(nodep->stmtsp());
     }
 
     // For speed, only iterate what is necessary.
-    virtual void visit(AstNetlist* nodep) override { iterateAndNextNull(nodep->modulesp()); }
-    virtual void visit(AstNodeModule* nodep) override { iterateAndNextNull(nodep->stmtsp()); }
-    virtual void visit(AstNode* nodep) override {}
+    void visit(AstNetlist* nodep) override { iterateAndNextNull(nodep->modulesp()); }
+    void visit(AstNodeModule* nodep) override { iterateAndNextNull(nodep->stmtsp()); }
+    void visit(AstNode* nodep) override {}
 
 public:
     // CONSTRUCTORS
     explicit MergeCondVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~MergeCondVisitor() override {
+    ~MergeCondVisitor() override {
         V3Stats::addStat("Optimizations, MergeCond merges", m_statMerges);
+        V3Stats::addStat("Optimizations, MergeCond candidate items", m_statCandidateItems);
         V3Stats::addStat("Optimizations, MergeCond merged items", m_statMergedItems);
         V3Stats::addStat("Optimizations, MergeCond longest merge", m_statLongestList);
     }
@@ -878,5 +888,5 @@ public:
 void V3MergeCond::mergeAll(AstNetlist* nodep) {
     UINFO(2, __FUNCTION__ << ": " << endl);
     { MergeCondVisitor{nodep}; }
-    V3Global::dumpCheckGlobalTree("merge_cond", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 6);
+    V3Global::dumpCheckGlobalTree("merge_cond", 0, dumpTreeEitherLevel() >= 6);
 }

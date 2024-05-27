@@ -7,7 +7,8 @@
 // SPDX-License-Identifier: CC0-1.0
 
 #include <verilated.h>
-#include "Vt_order_quad.h"
+
+#include VM_PREFIX_INCLUDE
 
 //======================================================================
 
@@ -26,9 +27,10 @@ void check(QData got, QData exp) {
 }
 
 int main(int argc, char* argv[]) {
-    topp = new VM_PREFIX;
-
     Verilated::debug(0);
+    Verilated::commandArgs(argc, argv);
+
+    topp = new VM_PREFIX;
 
     topp->a0 = 0;
     topp->eval();
