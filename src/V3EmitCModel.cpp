@@ -670,10 +670,10 @@ class EmitCModel final : public EmitCFunc {
 
         if (ofp()) closeOutputFile();
     }
-    
-    void emitDPionterDecl (const AstVar* nodep) {
-	puts("ubvec!(" + cvtToStr(nodep->widthMin()) + ")* " +
-	     nodep->nameProtect().c_str() + ";\n");
+
+    void emitDPionterDecl(const AstVar* nodep) {
+        puts("ubvec!(" + cvtToStr(nodep->widthMin()) + ")* " + nodep->nameProtect().c_str()
+             + ";\n");
     }
 
     void emitDPointerDecl(std::ofstream& of, const AstVar* nodep) {
