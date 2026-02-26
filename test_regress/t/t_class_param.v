@@ -1,11 +1,11 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
-`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) !== (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
+`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) != (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
 
 // See also t_class_param_mod.v
 
@@ -42,6 +42,9 @@ class Cls #(parameter PBASE = 12);
       return PBASE;
    endfunction
    typedef enum { E_PBASE = PBASE } enum_t;
+   class ClsInner;
+      bit [PBASE-1:0] member;
+   endclass
 endclass
 
 typedef Cls#(8) Cls8_t;
@@ -59,7 +62,7 @@ class Sum #(type T);
    static int sum;
    static function void add(T element);
       sum += int'(element);
-      endfunction
+   endfunction
 endclass
 
 class IntQueue;
@@ -131,11 +134,13 @@ endclass
 typedef ClsParamString#("abcde") cls_param_string_def_t;
 typedef ClsParamString#("xyz") cls_param_string_not_def_t;
 
-module t (/*AUTOARG*/);
+module t;
 
    Cls c12;
    Cls #(.PBASE(4)) c4;
    Cls8_t c8;
+   Cls#()::ClsInner ci;
+   Cls#(8)::ClsInner ci8;
    Wrap #(.P(16)) w16;
    Wrap2 #(.P(32)) w32;
    SelfRefClassTypeParam src_logic;
@@ -155,6 +160,8 @@ module t (/*AUTOARG*/);
       c12 = new;
       c4 = new;
       c8 = new;
+      ci = new;
+      ci8 = new;
       w16 = new;
       w32 = new;
       src_int = new;
@@ -195,6 +202,10 @@ module t (/*AUTOARG*/);
       c4.member = 32'haaaaaaaa;
       c8.member = 32'haaaaaaaa;
       // verilator lint_on WIDTH
+      ci.member = 12'haaa;
+      ci8.member = 8'hff;
+      if (ci.member != 12'haaa) $stop;
+      if (ci8.member != 8'hff) $stop;
       if (c12.member != 12'haaa) $stop;
       if (c4.member != 4'ha) $stop;
       if (c12.get_member() != 12'haaa) $stop;
@@ -210,8 +221,11 @@ module t (/*AUTOARG*/);
       qi.q = '{2, 4, 6, 0, 2};
       if (qi.getSum() != 14) $stop;
       Sum#(int)::add(arr[0]);
-      if(Sum#(int)::sum != 16) $stop;
-      if(Sum#(real)::sum != 0) $stop;
+      if (Sum#(int)::sum != 16) $stop;
+
+      if (Sum#(real)::sum != 0) $stop;
+      Sum#(real)::add(1.9);  // rounds
+      if (Sum#(real)::sum != 2) $stop;
 
       if (ClsParam#(ClsStatic)::param_t::x != 1) $stop;
       if (ClsParam#(ClsStatic)::param_t::get_2() != 2) $stop;
@@ -220,7 +234,7 @@ module t (/*AUTOARG*/);
       if (cls_param_field.get(2) != 7) $stop;
 
       dict_op.set("abcd", 1);
-      if(dict_op.get("abcd") != 1) $stop;
+      if (dict_op.get("abcd") != 1) $stop;
 
       if (getter1.get_1() != 1) $stop;
       if (Getter1#()::get_1() != 1) $stop;

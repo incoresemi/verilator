@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2010-2023 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2010-2023 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -34,18 +34,6 @@
 // These require the above. Comment prevents clang-format moving them
 #include "TestSimulator.h"
 #include "TestVpi.h"
-
-// __FILE__ is too long
-#define FILENM "t_vpi_module_empty.cpp"
-
-#define DEBUG \
-    if (0) printf
-
-#define CHECK_RESULT_NZ(got) \
-    if (!(got)) { \
-        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", FILENM, __LINE__); \
-        return __LINE__; \
-    }
 
 extern "C" {
 int mon_check() {

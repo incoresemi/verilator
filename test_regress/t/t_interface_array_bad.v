@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Demonstrate deferred linking error messages
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 interface foo_intf;
@@ -12,7 +12,7 @@ function integer the_other_func (input integer val);
    return val;
 endfunction
 
-module t (/*AUTOARG*/);
+module t;
 
    localparam N = 4;
 
@@ -30,7 +30,7 @@ module t (/*AUTOARG*/);
    //assign baz_inst.7 = 1'b1;
    //assign baz_inst.qux_t = 1'b1;
    //assign baz_inst.the_func = 1'b1;
-   //assign baz_inst.the_lp = 1'b1;
+   //assign baz_inst.THE_LP = 1'b1;
 
    //assign bar.x = 1'b1;
    //assign fake_inst.x = 1'b1;
@@ -50,5 +50,5 @@ module baz;
       return val;
    endfunction
 
-   localparam the_lp = 5;
+   localparam THE_LP = 5;
 endmodule

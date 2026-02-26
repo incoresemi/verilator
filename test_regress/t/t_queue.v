@@ -1,27 +1,27 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2019 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
 `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
 `define checks(gotv,expv) do if ((gotv) != (expv)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
-`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) !== (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
+`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) != (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
 
 module t (/*AUTOARG*/
-   // Inputs
-   clk
-   );
+  // Inputs
+  clk
+  );
    input clk;
 
    integer cyc = 0;
 
    integer i;
 
-   typedef integer q_t[$];
+   typedef int q_t[$];
 
-   function void set_val(ref integer lhs, input integer rhs);
+   function void set_val(ref int lhs, input int rhs);
       lhs = rhs;
    endfunction
 
@@ -121,7 +121,7 @@ module t (/*AUTOARG*/
          string q[$];
          string p[$:3];
          string v;
-         int j = 0;
+         int j;
 
          // Empty queue checks
          `checkh($left(q), 0);
@@ -149,7 +149,7 @@ module t (/*AUTOARG*/
          v = q[4]; `checks(v, "");
          //Unsup: `checkh(q[$], "b2");
 
-         `checkp(q, "'{\"f2\", \"f1\", \"b1\", \"b2\"} ");
+         `checkp(q, "'{\"f2\", \"f1\", \"b1\", \"b2\"}");
          `checkp(p, "'{}");
 
          //Unsup: q.delete(1);
@@ -160,6 +160,7 @@ module t (/*AUTOARG*/
          //v = q[0]; `checks(v, "ins0");
          //v = q[3]; `checks(v, "ins3");
 
+         j = 0;
          foreach (q[i]) begin
             j++;
             v = q[i];

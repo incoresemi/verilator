@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 `timescale 10ns/1ns
@@ -54,7 +54,8 @@ module t;
 
    always
       begin
-         sig_t val = '0;
+         sig_t val;
+         val = '0;
          cb.D <= val;
          for (int i = 0; i < 5; i++) begin ##(`TEST_CYCLE_DELAY+`TEST_OUTPUT_SKEW/`TEST_CLK_PERIOD+1)
             val = {`TEST_WIDTH{(`TEST_BITS/`TEST_WIDTH)'('ha + i)}};

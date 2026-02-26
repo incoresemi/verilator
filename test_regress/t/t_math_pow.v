@@ -1,24 +1,19 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define STRINGIFY(x) `"x`"
 
+// verilog_format: off
 `define stop $stop
-`ifdef VERILATOR
- `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0)
-`else
- `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); end while(0)
-`endif
+`define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0)
+// verilog_format: on
 
-module t (/*AUTOARG*/
-   // Inputs
-   clk
-   );
-
-   input clk;
+module t (
+    input clk
+);
 
    reg [66:0] a;
    reg [66:0] b;
@@ -37,7 +32,8 @@ module t (/*AUTOARG*/
    wire signed [66:0] bsw = b[66:0];
 
    // verilator lint_off WIDTH
-   wire [66:0]         shifted = 2 ** b[20:0];
+   wire [66:0] shifted        = 32'd2  ** b[20:0];
+   wire [66:0] shifted_signed = 32'sd2 ** b[20:0];
 
    wire [15:0] uiii = aui ** bui;
    wire [15:0] uiiq = aui ** buq;
@@ -358,5 +354,6 @@ module t (/*AUTOARG*/
         32'd09: `checkh(shifted, 67'h0000000000000000);
         default: ;
       endcase
+      `checkh(shifted_signed, shifted);
    end
 endmodule

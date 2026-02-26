@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 class Foo1;
@@ -50,18 +50,29 @@ class Wrapper#(type VAL_T=int);
    VAL_T value;
 endclass
 
-module t (/*AUTOARG*/);
+class Bum;
+   typedef int map_t[string];
+   map_t m_value;
+   function new(map_t value);
+      m_value = value;
+   endfunction
+endclass
+
+module t;
 
    typedef WBase wrap_map_t[string];
    typedef WBase wrap_queue_t[$];
 
-   initial begin
-      Bar bar_i = new;
-      Baz baz_1_i = new;
-      Baz #(Foo2) baz_2_i = new;
+   localparam string str_key = "the_key";
 
-      Wrapper#(wrap_map_t) wrap_map = new();
-      Wrapper#(wrap_queue_t) wrap_queue = new();
+   initial begin
+      automatic Bar bar_i = new;
+      automatic Baz baz_1_i = new;
+      automatic Baz #(Foo2) baz_2_i = new;
+      automatic Bum bum_i;
+
+      automatic Wrapper#(wrap_map_t) wrap_map = new();
+      automatic Wrapper#(wrap_queue_t) wrap_queue = new();
 
       bar_i.set(1);
       baz_1_i.set(2);
@@ -70,6 +81,9 @@ module t (/*AUTOARG*/);
       if (bar_i.get(1).get_x() != 1) $stop;
       if (baz_1_i.get(2).get_x() != 1) $stop;
       if (baz_2_i.get(3).get_x() != 2) $stop;
+
+      bum_i = new('{str_key: 42});
+      if (bum_i.m_value["the_key"] != 42) $stop;
 
       $write("*-* All Finished *-*\n");
       $finish;

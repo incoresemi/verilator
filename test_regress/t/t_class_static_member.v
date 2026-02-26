@@ -1,13 +1,19 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
 `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
 
 class Cls;
+   class InnerCls;
+      static function int f_inner_cs_st();
+         ++c_st; return c_st;
+      endfunction
+   endclass
+
    int c_no = 2;
    //automatic int c_au = 2;  // automatic not a legal keyword here
    static int c_st = 22;
@@ -22,10 +28,9 @@ class Cls;
    static function int f_cs_st ();
       ++c_st; return c_st;
    endfunction
-
 endclass
 
-module t (/*AUTOARG*/);
+module t;
 
    Cls a = new;
    Cls b = new;
@@ -43,6 +48,7 @@ module t (/*AUTOARG*/);
       v = b.f_c_st(); `checkh(v, 26);
       //
       v = Cls::f_cs_st(); `checkh(v, 27);
+      v = Cls::InnerCls::f_inner_cs_st(); `checkh(v, 28);
 
       $write("*-* All Finished *-*\n");
       $finish;

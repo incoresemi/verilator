@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 class Cls;
@@ -32,10 +32,7 @@ class Cls;
    endfunction
 endclass
 
-module t(/*AUTOARG*/);
-
-   automatic int rand_result, v1, v2;
-   automatic string s;
+module t;
 
    initial begin
       Cls c;

@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -31,11 +31,11 @@
 //######################################################################
 
 void VlcTop::readCoverage(const string& filename, bool nonfatal) {
-    UINFO(2, "readCoverage " << filename << endl);
+    UINFO(2, "readCoverage " << filename);
 
     std::ifstream is{filename.c_str()};
     if (!is) {
-        if (!nonfatal) v3fatal("Can't read " << filename);
+        if (!nonfatal) v3fatal("Can't read coverage file: " << filename);
         return;
     }
 
@@ -44,15 +44,17 @@ void VlcTop::readCoverage(const string& filename, bool nonfatal) {
 
     while (!is.eof()) {
         const string line = V3Os::getline(is);
-        // UINFO(9," got "<<line<<endl);
+        // UINFO(9, " got " << line);
         if (line[0] == 'C') {
             string::size_type secspace = 3;
             for (; secspace < line.length(); secspace++) {
                 if (line[secspace] == '\'' && line[secspace + 1] == ' ') break;
             }
             const string point = line.substr(3, secspace - 3);
+            if (!opt.isTypeMatch(point.c_str())) continue;
+
             const uint64_t hits = std::atoll(line.c_str() + secspace + 1);
-            // UINFO(9,"   point '"<<point<<"'"<<" "<<hits<<endl);
+            // UINFO(9, "   point '" << point << "'" << " " << hits);
 
             const uint64_t pointnum = points().findAddPoint(point, hits);
             if (opt.rank()) {  // Only if ranking - uses a lot of memory
@@ -66,11 +68,11 @@ void VlcTop::readCoverage(const string& filename, bool nonfatal) {
 }
 
 void VlcTop::writeCoverage(const string& filename) {
-    UINFO(2, "writeCoverage " << filename << endl);
+    UINFO(2, "writeCoverage " << filename);
 
     std::ofstream os{filename.c_str()};
     if (!os) {
-        v3fatal("Can't write " << filename);
+        v3fatal("Can't write file: " << filename);
         return;
     }
 
@@ -82,11 +84,11 @@ void VlcTop::writeCoverage(const string& filename) {
 }
 
 void VlcTop::writeInfo(const string& filename) {
-    UINFO(2, "writeInfo " << filename << endl);
+    UINFO(2, "writeInfo " << filename);
 
     std::ofstream os{filename.c_str()};
     if (!os) {
-        v3fatal("Can't write " << filename);
+        v3fatal("Can't write file: " << filename);
         return;
     }
 
@@ -154,7 +156,7 @@ struct CmpComputrons final {
 };
 
 void VlcTop::rank() {
-    UINFO(2, "rank...\n");
+    UINFO(2, "rank...");
     uint64_t nextrank = 1;
 
     // Sort by computrons, so fast tests get selected first
@@ -178,8 +180,8 @@ void VlcTop::rank() {
     // then hierarchically solve a small subset of tests, and take resulting
     // solution and move up to larger subset of tests.  (Aka quick sort.)
     while (true) {
-        if (debug()) {
-            UINFO(9, "Left on iter" << nextrank << ": ");  // LCOV_EXCL_LINE
+        if (debug() >= 9) {
+            UINFO_PREFIX("Left on iter" << nextrank << ": ");  // LCOV_EXCL_LINE
             remaining.dump();  // LCOV_EXCL_LINE
         }
         VlcTest* bestTestp = nullptr;
@@ -214,7 +216,7 @@ void VlcTop::annotateCalc() {
         if (!filename.empty() && lineno != 0) {
             VlcSource& source = sources().findNewSource(filename);
             UINFO(9, "AnnoCalc count " << filename << ":" << lineno << ":" << point.column() << " "
-                                       << point.count() << " " << point.linescov() << '\n');
+                                       << point.count() << " " << point.linescov());
             // Base coverage
             source.insertPoint(lineno, &point);
             // Additional lines covered by this statement
@@ -252,12 +254,12 @@ void VlcTop::annotateCalcNeeded() {
     int totOk = 0;
     for (auto& si : m_sources) {
         VlcSource& source = si.second;
-        // UINFO(1,"Source "<<source.name()<<endl);
+        // UINFO(1, "Source " << source.name());
         if (opt.annotateAll()) source.needed(true);
         VlcSource::LinenoMap& lines = source.lines();
         for (auto& li : lines) {
             VlcSourceCount& sc = li.second;
-            // UINFO(0, "Source "<<source.name()<<":"<<sc.lineno()<<":"<<sc.column()<<endl);
+            // UINFO(0, "Source " << source.name() << ":" << sc.lineno() << ":" << sc.column());
             ++totCases;
             if (opt.countOk(sc.minCount())) {
                 ++totOk;
@@ -281,17 +283,17 @@ void VlcTop::annotateOutputFiles(const string& dirname) {
         const string filename = source.name();
         const string outfilename = dirname + "/" + V3Os::filenameNonDir(filename);
 
-        UINFO(1, "annotateOutputFile " << filename << " -> " << outfilename << endl);
+        UINFO(1, "annotateOutputFile " << filename << " -> " << outfilename);
 
         std::ifstream is{filename.c_str()};
         if (!is) {
-            v3error("Can't read " << filename);
+            v3error("Can't read annotation file: " << filename);
             return;
         }
 
         std::ofstream os{outfilename.c_str()};
         if (!os) {
-            v3fatal("Can't write " << outfilename);
+            v3error("Can't write file: " << outfilename);
             return;
         }
 
@@ -308,8 +310,8 @@ void VlcTop::annotateOutputFiles(const string& dirname) {
                 os << "        " << line << '\n';
             } else {
                 VlcSourceCount& sc = lit->second;
-                // UINFO(0,"Source
-                // "<<source.name()<<":"<<sc.lineno()<<":"<<sc.column()<<endl);
+                // UINFO(0, "Source " << source.name() << ":" << sc.lineno() << ":" <<
+                // sc.column());
                 const bool minOk = opt.countOk(sc.minCount());
                 const bool maxOk = opt.countOk(sc.maxCount());
                 if (minOk) {

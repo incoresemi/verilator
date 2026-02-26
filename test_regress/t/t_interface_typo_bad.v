@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2016 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2016 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 //bug1097
@@ -16,7 +16,7 @@ module submod
 
 endmodule
 
-module t (/*AUTOARG*/);
+module t;
    // Intentional typo, compiler should point this out, or that fo_intf does
    // not match foo_intf on the submod port map
    fo_intf the_foo();

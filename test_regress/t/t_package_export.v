@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2012 by Jeremy Bennett.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2012 Jeremy Bennett
 // SPDX-License-Identifier: CC0-1.0
 
 // See issue #591
@@ -50,7 +50,7 @@ package pkg31;
    import pkg30::*;
 endpackage
 
-module t (/*AUTOARG*/);
+module t;
 
    reg [pkg11::PARAM1 : 0] bus11;
    reg [pkg11::PARAM2 : 0] bus12;

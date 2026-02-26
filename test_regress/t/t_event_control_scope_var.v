@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 module test_mod(input reg clk, input reg reset, output integer result);
@@ -11,7 +11,7 @@ module test_mod(input reg clk, input reg reset, output integer result);
 endmodule
 
 module Dut(input clk);
-  integer num;
+  int num;
   integer result1;
   integer result2;
   reg reset1;

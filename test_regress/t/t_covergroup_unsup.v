@@ -1,15 +1,23 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
    // Inputs
    clk
    );
+   class InnerPacket;
+       bit field;
+   endclass
+   class Packet;
+       InnerPacket inner_packet;
+   endclass
 
+   Packet p;
    input clk;
+   logic rst;
    int   a;
    int   b;
    logic c;
@@ -18,6 +26,12 @@ module t (/*AUTOARG*/
    always @(posedge clk) begin
       cyc <= cyc + 1;
    end
+
+   function automatic void funca();
+   endfunction
+
+   function automatic void funcb();
+   endfunction
 
    // NOTE this grammar hasn't been checked with other simulators,
    // is here just to avoid uncovered code lines in the grammar.
@@ -31,7 +45,7 @@ module t (/*AUTOARG*/
       type_option.comment = "type_option_comment";  // cg, cp, cross
       type_option.strobe = 0;  // cg
       type_option.merge_instances = 1;  // cg
-      type_option.distribuge_first = 1;  // cg
+      type_option.distribute_first = 1;  // cg
       option.name = "the_name";  // cg
       option.weight = 1;  // cg, cp, cross
       option.goal = 98;  // cg, cp, cross
@@ -53,7 +67,7 @@ module t (/*AUTOARG*/
    covergroup cg_bracket;
       {}
    endgroup
-   covergroup cg_bracket;
+   covergroup cg_bracket2;
       { option.name = "option"; }
    endgroup
    covergroup cg_cp;
@@ -90,8 +104,11 @@ module t (/*AUTOARG*/
    covergroup cg_cross3;
       cross a, b { option.comment = "cross"; option.weight = 12; }
    endgroup
-   covergroup cg_cross3;
-      cross a, b { function void crossfunc; endfunction; }
+   covergroup cg_cross4;
+      cross a, b {
+         function void crossfunc; endfunction
+         bins one = crossfunc();
+      }
    endgroup
    covergroup cg_cross_id;
       my_cg_id: cross a, b iff (!rst);
@@ -107,17 +124,17 @@ module t (/*AUTOARG*/
       { bins ba[] = {a}; }
       { bins ba[2] = {a}; }
 
-      { bins ba = {a} with { b }; }
+      { bins ba = {a} with ( b ); }
 
       { wildcard bins bwa = {a}; }
-      { wildcard bins bwaw = {a} with { b }; }
+      { wildcard bins bwaw = {a} with ( b ); }
 
       { bins def = default; }
       { bins defs = default sequence; }
 
       { bins bts = ( 1, 2 ); }
       { wildcard bins wbts = ( 1, 2 ); }
-      { bins bts2 = ( 2, 3 ), ( [5:6] ) ; }
+      { bins bts2 = ( 2, 3 ), ( [5:6] ), ( [5 +/- 2] ), ( [ 5 +%- 20.0] ) ; }
 
       { bins bts2 = ( 1,5 => 6,7 ) ; }
       { bins bts2 = ( 3 [*5] ) ; }
@@ -126,7 +143,13 @@ module t (/*AUTOARG*/
       { bins bts2 = ( 3 [->5:6] ) ; }
       { bins bts2 = ( 3 [=5] ) ; }
       { bins bts2 = ( 3 [=5:6] ) ; }
+   endgroup
 
+   covergroup cg_coverpoint_ref;
+     coverpoint a {
+       bins div_by_2 = a with (item % 2 == 0);
+       bins div_by_2_paren[] = a with (item % 2 == 0);
+     }
    endgroup
 
    covergroup cg_cross_bins;
@@ -140,16 +163,45 @@ module t (/*AUTOARG*/
          bins bin_nd = ! binsof(a) intersect { b };
 
          bins bin_e = with (a);
-         bins bin_e = ! with (a);
+         bins bin_not_e = ! with (a);
 
          bins bin_par = (binsof(a));
          bins bin_and = binsof(a) && binsof(b);
          bins bin_or = binsof(a) || binsof(b);
+         bins bin_with = binsof(a) with (a);
+         bins bin_or_with = binsof(a) || binsof(a) with (a);
+         bins bin_and_with = binsof(a) && binsof(a) with (a);
+         bins bin_multiple_fields = binsof(p.inner_packet.field);
       }
    endgroup
 
-   covergroup cg_more extends cg_empty;
+   covergroup cgArgs(int cg_lim);
    endgroup
+
+   class CgCls;
+      int m_x;
+      int m_y;
+      int m_z;
+      covergroup cov1 @m_z;
+         coverpoint m_x;
+         coverpoint m_y;
+      endgroup
+`ifndef T_COVERGROUP_UNSUP_IGN
+      function new(); cov1 = new; endfunction
+`endif
+   endclass
+
+   class CgEmb;
+      covergroup extends cg_empty;
+      endgroup
+   endclass
+
+   initial begin
+      automatic cg_empty cov1 = new;
+`ifndef T_COVERGROUP_UNSUP_IGN
+      automatic cgArgs cov2 = new(2);
+`endif
+   end
 
    always @(posedge clk) begin
       if (cyc == 10) begin

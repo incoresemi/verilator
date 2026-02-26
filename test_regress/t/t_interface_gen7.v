@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 // bug998
@@ -9,7 +9,9 @@
 interface intf
   #(parameter PARAM = 0)
    ();
+   /* verilator lint_off MULTIDRIVEN */
    logic val;
+   /* verilator lint_on MULTIDRIVEN */
    function integer func (); return 5; endfunction
 endinterface
 

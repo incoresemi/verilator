@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2010-2011 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2010-2011 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -127,13 +127,14 @@ void modDump(TestVpiHandle& it, int n) {
         const int type = vpi_get(vpiType, hndl);
         const char* name = vpi_get_str(vpiName, hndl);
         const char* fullname = vpi_get_str(vpiFullName, hndl);
-        printf("%s (%s) %s\n", name, strFromVpiObjType(type), fullname);
+        printf("%s (%s) %s ", name, strFromVpiObjType(type), fullname);
         if (type == vpiParameter || type == vpiConstType) {
-            for (int i = 0; i < n + 1; i++) printf("    ");
-            printf("vpiConstType=%s\n", strFromVpiConstType(vpi_get(vpiConstType, hndl)));
+            printf(" vpiConstType=%s", strFromVpiConstType(vpi_get(vpiConstType, hndl)));
         }
+        if (type == vpiModule) printf(" vpiDefName=%s", vpi_get_str(vpiDefName, hndl));
+        printf("\n");
 
-        if (iterate_over.find(type) == iterate_over.end()) { continue; }
+        if (iterate_over.find(type) == iterate_over.end()) continue;
         for (int type : iterate_over.at(type)) {
             TestVpiHandle subIt = vpi_iterate(type, hndl);
             if (subIt) {

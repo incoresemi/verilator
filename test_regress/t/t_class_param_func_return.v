@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 class Foo #(type T=int);
@@ -21,7 +21,7 @@ class Foo #(type T=int);
    endfunction
 endclass
 
-module t (/*AUTOARG*/);
+module t;
 
    Foo f_def1, f_def2;
    Foo#(bit) f_bit1, f_bit2;

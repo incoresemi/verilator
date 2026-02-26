@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2009 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2009 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -21,6 +21,7 @@ module t (/*AUTOARG*/
    initial begin
       for (int i = 0; i < 8; i++) begin
           arr[i] = 0;
+          arri[i] = 0;
       end
    end
 
@@ -29,10 +30,12 @@ module t (/*AUTOARG*/
       if (cyc == 5 && arri[1] != 8) begin
          $stop;
       end
-      for (int i = 0; i < 7; ++i) begin
-          arr[i+1] <= arr[i];
+      if (cyc >= 2) begin
+         for (int i = 0; i < 7; ++i) begin
+             arr[i+1] <= arr[i];
+         end
+         arr[0] <= arr[0] + 1;
       end
-      arr[0] <= arr[0] + 1;
    end
 
 endmodule : t
@@ -47,7 +50,8 @@ module has_array (
 
    always @(posedge clk) begin
       cyc <= cyc + 1;
-      if (arri[0] == 10 && cyc == 10) begin
+      if (cyc == 10) begin
+         if (arri[0] != 8) $stop;
          $write("*-* All Finished *-*\n");
          $finish;
       end

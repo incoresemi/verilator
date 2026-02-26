@@ -1,11 +1,11 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2009 by Iztok Jeras.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2009 Iztok Jeras
 // SPDX-License-Identifier: CC0-1.0
 
 //bug991
-module t (/*AUTOARG*/);
+module t;
 
    logic [31:0] array_assign [3:0];
    logic [31:0] array_other [3:0];

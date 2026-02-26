@@ -1,11 +1,11 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
-   logic clk = 0, foo = 0, bar = 0;
+   bit clk = 0, foo = 0, bar = 0;
 
    always #5 clk = ~clk;
 
@@ -27,7 +27,7 @@ module t;
 
        #1
        if (foo != 0 || cb.foo != 0) $stop;
-       if (cb.bar != 1) $stop;
+       if (cb.bar == 1) $stop;
 
        @(posedge foo)
        if ($time != 7) $stop;

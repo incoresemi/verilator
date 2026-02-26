@@ -1,11 +1,14 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2003 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2003 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 class Cls;
    function int fi();
+      return 10;
+   endfunction
+   static function int sfi();
       return 10;
    endfunction
 endclass
@@ -22,6 +25,7 @@ module t;
       //
       c = new;
       c.fi();  // Bad - ignored result
+      c.sfi();  // Bad - ignored result
       //
       $write("*-* All Finished *-*\n");
       $finish;

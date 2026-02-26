@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Geza Lore.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Geza Lore
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
@@ -13,7 +13,7 @@ module sub;
    /* verilator no_inline_module */
 
    // Goes into const pool which is separate file
-   wire bit   [255:0] C = {32'h1111_1111,
+   wire logic [255:0] C = {32'h1111_1111,
                            32'h2222_2222,
                            32'h3333_3333,
                            32'h4444_4444,

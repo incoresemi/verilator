@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2008 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2008 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -47,6 +47,10 @@ module t (/*AUTOARG*/
              // Inputs
              .clk                       (clk));
    par par1 (/*AUTOINST*/);
+   cond cond1 (/*AUTOINST*/
+               // Inputs
+               .clk                     (clk),
+               .cyc                     (cyc));
 
    always @ (posedge clk) begin
       if (cyc!=0) begin
@@ -212,7 +216,7 @@ module tsk (/*AUTOARG*/
       center_task(1'b0);
    end
 
-   task center_task;
+   task automatic center_task;
       input external;
       begin
          if (toggle) begin  // CHECK_COVER(0,"top.t.t1",1)
@@ -223,7 +227,8 @@ module tsk (/*AUTOARG*/
          end
       end
       begin
-         Cls c = new(1'b1);
+         Cls c;
+         c = new(1'b1);
          c.fauto();
          Cls::fstatic(1'b1);
       end
@@ -290,4 +295,82 @@ module par();
       return i;
    endfunction
 
+endmodule
+
+package my_pkg;
+   int x = 1 ? 1 : 0;
+endpackage
+
+class Getter1;
+   function int get_1;
+      return 1;
+   endfunction
+endclass
+
+module cond(input logic clk, input int cyc);
+   logic a, b, c, d, e, f, g, h, k, l, m;
+   logic [5:0] tab;
+   typedef logic [7:0] arr_t[1:0];
+   arr_t data[1:0];
+   Getter1 getter1 = new;
+   string s;
+
+   struct packed {
+       logic unsigned [15:0] a;
+       logic unsigned [15:0] b;
+   } pstruct;
+
+   function logic func_side_effect;
+      $display("SIDE EFFECT");
+      return 1;
+   endfunction
+
+   function arr_t get_arr;
+      arr_t arr;
+      return arr;
+   endfunction
+
+   assign a = (cyc == 0) ? clk : 1'bz;
+   assign b = (cyc == 1) ? clk : 0;
+   assign c = func_side_effect() ? clk : 0;
+   always @(posedge clk) begin
+      d = (cyc % 3 == 0) ? 1 : 0;
+      s = (getter1.get_1() == 0) ? "abcd" : $sformatf("%d", getter1.get_1()[4:0]);
+   end
+   assign e = (cyc % 3 == 1) ? (clk ? 1 : 0) : 1;
+
+   // ternary operator in condition shouldn't be included to the coverae
+   assign f = (cyc != 0 ? 1 : 0) ? 1 : 0;
+   // the same as in index
+   assign tab[clk ? 1 : 0] = 1;
+   assign m = tab[clk ? 3 : 4];
+
+   for (genvar i = 0; i < 2; i++) begin
+      assign g = clk ? 1 : 0;
+   end
+
+   always begin
+      if (cyc == 5) h = cyc > 5 ? 1 : 0;
+      else h = 1;
+
+      data[0] = (cyc == 2) ? '{8'h01, 8'h02} : get_arr();
+
+      // ternary operator in conditions should be skipped
+      for (int i = 0; (i < 5) ? 1 : 0; i++) begin
+         k = 1'(i);
+      end
+      for (int i = 0; i < 7; i = (i > 4) ? i + 1 : i + 2) begin
+         k = 1'(i);
+      end
+
+      if (k ? 1 : 0) k = 1;
+      else k = 0;
+   end
+
+   assign pstruct.a = cyc == 1 ? 16'd2 : 16'd3;
+   assign pstruct.b = 16'd0;
+
+   always @(posedge clk) begin
+     if (cyc == 2) $display("%08x", pstruct);
+   end
 endmodule

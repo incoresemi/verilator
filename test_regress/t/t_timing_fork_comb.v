@@ -1,11 +1,11 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
-   logic clk = 0;
+   bit clk;
 
    assign #5 clk = ~clk;
 
@@ -28,7 +28,7 @@ module t;
        c = a + b;
    end
 
-   logic[5:0] v;
+   bit [5:0] v;
    always @a begin
        v[0] = a[0];
        fork

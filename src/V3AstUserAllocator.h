@@ -7,10 +7,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -99,7 +99,7 @@ public:
     }
 
     // Get a pointer to the user data if exists, otherwise nullptr
-    T_Data* tryGet(const T_Node* nodep) { return getUserp(nodep); }
+    T_Data* tryGet(const T_Node* nodep) const { return getUserp(nodep); }
 
     void clear() { m_allocated.clear(); }
 };

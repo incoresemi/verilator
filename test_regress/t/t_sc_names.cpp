@@ -1,6 +1,6 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Edgar E. Iglesias.
+// This file ONLY is placed under the Creative Commons Public Domain
+// SPDX-FileCopyrightText: 2020 Edgar E. Iglesias
 // SPDX-License-Identifier: CC0-1.0
 
 #include VM_PREFIX_INCLUDE
@@ -14,7 +14,7 @@ int sc_main(int argc, char* argv[]) {
     std::vector<sc_object*> ch = tb->get_child_objects();
     bool found = false;
 
-    /* We expect to find clk in here. */
+    // We expect to find clk in here
     for (int i = 0; i < ch.size(); ++i) {
         if (!std::strcmp(ch[i]->basename(), "clk")) found = true;
     }

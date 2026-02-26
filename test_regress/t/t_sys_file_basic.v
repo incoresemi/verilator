@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2003 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2003 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define STRINGIFY(x) `"x`"
@@ -13,7 +13,7 @@
 
 module t;
    integer file;
-   integer file_a[0];
+   integer file_a[1];
 
    integer      chars;
    reg [1*8:1]  letterl;

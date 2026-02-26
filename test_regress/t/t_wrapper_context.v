@@ -3,8 +3,8 @@
 // This model counts from 0 to 10. It is instantiated twice in concurrent
 // threads to check for race conditions/signal interference.
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020-2021 by Andreas Kuster.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020-2021 Andreas Kuster
 // SPDX-License-Identifier: CC0-1.0
 
 `define STRINGIFY(x) `"x`"
@@ -23,7 +23,11 @@ module top
       string number;
       string filename;
       number.itoa(trace_number);
+`ifdef TRACE_FST
+      filename = {`STRINGIFY(`TEST_OBJ_DIR), "/trace", number, ".fst"};
+`else
       filename = {`STRINGIFY(`TEST_OBJ_DIR), "/trace", number, ".vcd"};
+`endif
       $display("Writing dumpfile '%s'", filename);
       $dumpfile(filename);
       $dumpvars();

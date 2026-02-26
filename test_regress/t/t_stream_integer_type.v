@@ -11,11 +11,11 @@
 //                         integer_atom_type ::= byte | shortint | int | longint | integer | time
 //   integer_vector_type ::= bit | logic | reg
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Victor Besyakov.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Victor Besyakov
 // SPDX-License-Identifier: CC0-1.0
 
-module t (/*AUTOARG*/);
+module t;
 
    logic [31:0] packed_data_32;
    logic [31:0] packed_data_32_ref;

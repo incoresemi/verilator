@@ -1,12 +1,12 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Geza Lore.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Geza Lore
 // SPDX-License-Identifier: CC0-1.0
 
 `define show(x) $display("oarray[%2d] is %2d", x, oarray[x])
 
-module t (/*AUTOARG*/);
+module t;
 
    int iarray [63:0];
    int oarray [63:0];

@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t(/*AUTOARG*/
@@ -88,5 +88,69 @@ module Test(/*AUTOARG*/
       assert(0);
       $asserton;
       $assertcontrol(3, 8);
+      begin : blk
+         disable blk;
+      end
    end
+   initial begin
+      assert_simple_immediate_else: assert(0) else $display("fail");
+      assert_simple_immediate_stmt: assert(0) $display("pass");
+      assert_simple_immediate_stmt_else: assert(0) $display("pass"); else $display("fail");
+
+      assume_simple_immediate: assume(0);
+      assume_simple_immediate_else: assume(0) else $display("fail");
+      assume_simple_immediate_stmt: assume(0) $display("pass");
+      assume_simple_immediate_stmt_else: assume(0) $display("pass"); else $display("fail");
+   end
+
+   assert_observed_deferred_immediate: assert #0 (0);
+   assert_observed_deferred_immediate_else: assert #0 (0) else $display("fail");
+   assert_observed_deferred_immediate_stmt: assert #0 (0) $display("pass");
+   assert_observed_deferred_immediate_stmt_else: assert #0 (0) $display("pass"); else $display("fail");
+
+   assume_observed_deferred_immediate: assume #0 (0);
+   assume_observed_deferred_immediate_else: assume #0 (0) else $display("fail");
+   assume_observed_deferred_immediate_stmt: assume #0 (0) $display("pass");
+   assume_observed_deferred_immediate_stmt_else: assume #0 (0) $display("pass"); else $display("fail");
+
+   assert_final_deferred_immediate: assert final (0);
+   assert_final_deferred_immediate_else: assert final (0) else $display("fail");
+   assert_final_deferred_immediate_stmt: assert final (0) $display("pass");
+   assert_final_deferred_immediate_stmt_else: assert final (0) $display("pass"); else $display("fail");
+
+   assume_final_deferred_immediate: assume final (0);
+   assume_final_deferred_immediate_else: assume final (0) else $display("fail");
+   assume_final_deferred_immediate_stmt: assume final (0) $display("pass");
+   assume_final_deferred_immediate_stmt_else: assume final (0) $display("pass"); else $display("fail");
+
+   property prop();
+      @(posedge clk) 0
+   endproperty
+
+   assert_concurrent: assert property (prop);
+   assert_concurrent_else: assert property(prop) else $display("fail");
+   assert_concurrent_stmt: assert property(prop) $display("pass");
+   assert_concurrent_stmt_else: assert property(prop) $display("pass"); else $display("fail");
+
+   assume_concurrent: assume property(prop);
+   assume_concurrent_else: assume property(prop) else $display("fail");
+   assume_concurrent_stmt: assume property(prop) $display("pass");
+   assume_concurrent_stmt_else: assume property(prop) $display("pass"); else $display("fail");
+
+   cover_concurrent: cover property(prop);
+   cover_concurrent_stmt: cover property(prop) $display("pass");
+
+   restrict property (prop);
+
+   always_ff @(posedge clk) begin
+     unique0 casez(in)
+       1: $display("1a");
+       default: $display("1b");
+     endcase
+     priority casez(1'b1)
+       in[0]: $display("2a");
+       default: $display("2b");
+     endcase
+   end
+
 endmodule

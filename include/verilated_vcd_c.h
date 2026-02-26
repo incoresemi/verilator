@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2001-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2001-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=============================================================================
@@ -55,6 +55,8 @@ private:
     char* m_wrBufp;  // Output buffer
     char* m_wrFlushp;  // Output buffer flush trigger location
     char* m_writep;  // Write pointer into output buffer
+    char* m_wrTimeBeginp = nullptr;  // Write pointer for last time dump
+    char* m_wrTimeEndp = nullptr;  // Write pointer for last time dump
     size_t m_wrChunkSize;  // Output buffer size
     size_t m_maxSignalBytes = 0;  // Upper bound on number of bytes a single signal can generate
     uint64_t m_wroteBytes = 0;  // Number of bytes written to this file
@@ -103,7 +105,7 @@ protected:
     void commitTraceBuffer(Buffer*) override;
 
     // Configure sub-class
-    void configure(const VerilatedTraceConfig&) override{};
+    void configure(const VerilatedTraceConfig&) override {};
 
 public:
     //=========================================================================
@@ -132,7 +134,7 @@ public:
     //=========================================================================
     // Internal interface to Verilator generated code
 
-    void pushPrefix(const std::string&, VerilatedTracePrefixType);
+    void pushPrefix(const char*, VerilatedTracePrefixType);
     void popPrefix();
 
     void declEvent(uint32_t code, uint32_t fidx, const char* name, int dtypenum,

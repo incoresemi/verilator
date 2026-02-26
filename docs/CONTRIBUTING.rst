@@ -1,3 +1,6 @@
+.. SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
+.. SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
+
 Contributing to Verilator
 =========================
 
@@ -7,8 +10,8 @@ This contributing document contains some suggestions that may make
 contributions flow more efficiently.
 
 
-Did you find a bug?
--------------------
+Did you find a Verilator bug?
+-----------------------------
 
 - Please **ensure the bug was not already reported** by searching
   `Verilator Issues <https://verilator.org/issues>`__.
@@ -23,13 +26,13 @@ Did you find a bug?
     demonstrating the bug and expected behavior that is not occurring.
 
   - The ideal example works against other simulators, and is in the
-    test_regress/t test format, as described in
-    `Verilator Internals Documentation
+    test_regress/t test format, as described in `Verilator Internals
+    Documentation
     <https://github.com/verilator/verilator/blob/master/docs/internals.rst>`__.
 
 
-Did you write a patch that fixes a bug?
----------------------------------------
+Did you write a patch that fixes a Verilator bug?
+-------------------------------------------------
 
 - Please `Open a new Verilator issue <https://verilator.org/issues/new>`__
   if there is not one already describing the bug.
@@ -38,18 +41,18 @@ Did you write a patch that fixes a bug?
   <https://github.com/verilator/verilator/pulls>`__.
 
 - See the coding conventions, and other developer information in
-  ``docs/internals.rst`` in the distribution, or as rendered at
-  `Verilator Internals Documentation
+  ``docs/internals.rst`` in the distribution, or as rendered at `Verilator
+  Internals Documentation
   <https://github.com/verilator/verilator/blob/master/docs/internals.rst>`__.
 
-- Verilator uses GitHub Actions to provide continuous integration.  You
-  may want to enable Actions on your GitHub branch to ensure your changes
-  keep the tests passing.
+- Verilator uses GitHub Actions to provide continuous integration. You may
+  want to enable Actions on your GitHub branch to ensure your changes keep
+  the tests passing.
 
-- Your source-code contributions must be certified as open source,
-  under the `Developer Certificate of
-  Origin <https://developercertificate.org/>`__. On your first
-  contribution, you must either:
+- Your source-code contributions must be certified as open source, under
+  the `Developer Certificate of Origin
+  <https://developercertificate.org/>`__. On your first contribution, you
+  must either:
 
   - Have your patch include the addition of your name to `docs/CONTRIBUTORS
     <CONTRIBUTORS>`__ (preferred).
@@ -72,12 +75,12 @@ Did you write a patch that fixes a bug?
 - Most important is we get your patch.
 
 
-Do you have questions?
-----------------------
+Do you have questions on Verilator?
+-----------------------------------
 
-- Please see FAQ section and rest of the `Verilator
-  manual <https://verilator.org/verilator_doc.html>`__, or `Verilator
-  manual (PDF) <https://verilator.org/verilator_doc.pdf>`__.
+- Please see FAQ section and rest of the `Verilator manual
+  <https://verilator.org/verilator_doc.html>`__, or `Verilator manual (PDF)
+  <https://verilator.org/verilator_doc.pdf>`__.
 
 - Ask any question in the `Verilator forum
   <https://verilator.org/forum>`__.

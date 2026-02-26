@@ -1,6 +1,6 @@
 // DESCRIPTION: Verilator: Verilog Test module
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 interface class ICls;
@@ -21,16 +21,26 @@ class Testcase implements ICls;
    virtual function string get();
       return "In ICls";
    endfunction
+   function Testcase clone();
+      Testcase a = new this;
+      return a;
+   endfunction
 endclass
 
-module t(/*AUTOARG*/);
+module t;
 
    initial begin
       Testcase test;
+      Testcase cloned;
       test = new;
       if (test.cls.name != "test_class") $stop;
       if (test.cls.icls.get() != "In ICls") $stop;
+
+      cloned = test.clone();
+      if (cloned.cls.name != "test_class") $stop;
+
       test.cls.icls = null; // Prevent leak
+
       $write("*-* All Finished *-*\n");
       $finish;
    end

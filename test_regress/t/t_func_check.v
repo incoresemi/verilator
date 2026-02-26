@@ -1,6 +1,6 @@
 // DESCRIPTION: Verilator: Verilog Test module
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // verilator lint_off WIDTH
@@ -35,7 +35,7 @@ endmodule
 
 module chk (input clk, input rst_l, input expr);
 
-   integer errors; initial errors = 0;
+   int errors;
 
    task printerr;
       input [8*64:1] msg;

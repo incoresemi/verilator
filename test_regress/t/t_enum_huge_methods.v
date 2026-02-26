@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2014 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -49,21 +49,15 @@ module t (/*AUTOARG*/
       end
       //
       else if (cyc == 10) begin
-         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1234);
-         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 11) begin
          `checkh(i_cast, 0);
-         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1);
-         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 12) begin
          `checkh(i_cast, 1);
-         /* verilator lint_off BLKANDNBLK */
          i_cast <= $cast(e, 60'h1234_4567_abcd);
-         /* verilator lint_on BLKANDNBLK */
       end
       else if (cyc == 13) begin
          `checkh(i_cast, 1);

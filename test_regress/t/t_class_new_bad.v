@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 
@@ -23,7 +23,23 @@ class ClsArg;
    endfunction
 endclass
 
-module t (/*AUTOARG*/);
+class ClsNew1;
+  static function new();  // <--- Error: new can't be static
+  endfunction
+endclass
+
+class ClsNew2;
+  virtual function new();  // <--- Error: new can't be virtual
+  endfunction
+endclass
+
+class ClsNew3;
+  extern virtual function new();  // <--- Error: new can't be virtual
+endclass
+function ClsNew3::new();
+endfunction
+
+module t;
    initial begin
       ClsNoArg c1;
       ClsNoNew c2;

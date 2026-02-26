@@ -2,8 +2,8 @@
 //
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 #include <verilated.h>
@@ -15,6 +15,10 @@
 #include <verilated_vcd_c.h>
 #define TRACE_FILE_NAME "simx.vcd"
 #define TRACE_CLASS VerilatedVcdC
+#elif VM_TRACE_SAIF
+#include <verilated_saif_c.h>
+#define TRACE_FILE_NAME "simx.saif"
+#define TRACE_CLASS VerilatedSaifC
 #endif
 
 #include <memory>

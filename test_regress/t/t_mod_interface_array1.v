@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Johan Bjork.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Johan Bjork
 // SPDX-License-Identifier: CC0-1.0
 
 parameter N = 4;
@@ -51,6 +51,7 @@ module t
    intf_sink   sink(a_out, tl_intf);
 
    initial a_in = '0;
+   initial ack_out = '0;
    always @(posedge clk) begin
       a_in <= a_in + { {N-1 {1'b0}}, 1'b1 };
       ack_out <= ack_out + { {N-1 {1'b0}}, 1'b1 };

@@ -1,15 +1,17 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// Author: Yu-Sheng Lin johnjohnlys@media.ee.ntu.edu.tw
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2018 Yu-Sheng Lin <johnjohnlys@media.ee.ntu.edu.tw>
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
-   // Outputs
-   state,
-   // Inputs
-   clk
-   );
+  // Outputs
+  state,
+  // Inouts
+  fst_inout,
+  // Inputs
+  clk
+  );
 
    input clk;
 
@@ -27,6 +29,7 @@ module t (/*AUTOARG*/
    shortint        fst_shortint;
    longint         fst_longint;
    byte            fst_byte;
+   time            fst_time;
 
    parameter       fst_parameter = 123;
    localparam      fst_lparam = 456;
@@ -35,7 +38,14 @@ module t (/*AUTOARG*/
    tri0            fst_tri0;
    tri1            fst_tri1;
    tri             fst_tri;
+   triand          fst_triand;
+   trior           fst_trior;
+   //trireg          fst_trireg; // Error-UNSUPPORTED
+   wand            fst_wand;
+   wor             fst_wor;
    wire            fst_wire;
+   uwire           fst_uwire;
+   inout           fst_inout;
 
    Test test (/*AUTOINST*/
               // Outputs
@@ -47,6 +57,7 @@ module t (/*AUTOARG*/
    // Test loop
    always @ (posedge clk) begin
       cyc <= cyc + 1;
+      fst_time <= $time;
       if (cyc==0) begin
          // Setup
          rstn <= ~'1;

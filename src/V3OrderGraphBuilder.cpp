@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -102,8 +102,8 @@ class OrderGraphBuilder final : public VNVisitor {
     AstSenTree* m_hybridp = nullptr;
 
     bool m_inClocked = false;  // Underneath clocked AstActive
-    bool m_inPre = false;  // Underneath AstAssignPre
-    bool m_inPost = false;  // Underneath AstAssignPost/AstAlwaysPost
+    bool m_inPre = false;  // Underneath AlwaysPre
+    bool m_inPost = false;  // Underneath AstAlwaysPost
     std::function<bool(const AstVarScope*)> m_readTriggersCombLogic;
 
     // METHODS
@@ -126,16 +126,21 @@ class OrderGraphBuilder final : public VNVisitor {
 
     // VISITORS
     void visit(AstActive* nodep) override {
-        UASSERT_OBJ(!nodep->sensesStorep(), nodep,
+        UASSERT_OBJ(!nodep->senTreeStorep(), nodep,
                     "AstSenTrees should have been made global in V3ActiveTop");
         UASSERT_OBJ(m_scopep, nodep, "AstActive not under AstScope");
         UASSERT_OBJ(!m_logicVxp, nodep, "AstActive under logic");
         UASSERT_OBJ(!m_inClocked && !m_domainp && !m_hybridp, nodep, "Should not nest");
 
-        // This is the original sensitivity of the block (i.e.: not the ref into the TRIGGERVEC)
+        VL_RESTORER(m_domainp);
+        VL_RESTORER(m_hybridp);
+        VL_RESTORER(m_inClocked);
 
-        const AstSenTree* const senTreep
-            = nodep->sensesp()->hasCombo() ? nodep->sensesp() : m_trigToSen.at(nodep->sensesp());
+        // This is the original sensitivity of the block (i.e.: not the ref into the trigger vec)
+
+        const AstSenTree* const senTreep = nodep->sentreep()->hasCombo()
+                                               ? nodep->sentreep()
+                                               : m_trigToSen.at(nodep->sentreep());
 
         m_inClocked = senTreep->hasClocked();
 
@@ -145,11 +150,11 @@ class OrderGraphBuilder final : public VNVisitor {
 
         // Combinational and hybrid logic will have it's domain assigned based on the driver
         // domains. For clocked logic, we already know its domain.
-        if (!senTreep->hasCombo() && !senTreep->hasHybrid()) m_domainp = nodep->sensesp();
+        if (!senTreep->hasCombo() && !senTreep->hasHybrid()) m_domainp = nodep->sentreep();
 
         // Hybrid logic also includes additional sensitivities
         if (senTreep->hasHybrid()) {
-            m_hybridp = nodep->sensesp();
+            m_hybridp = nodep->sentreep();
             // Mark AstVarScopes that are explicit sensitivities
             AstNode::user3ClearTree();
             senTreep->foreach([](const AstVarRef* refp) {  //
@@ -163,11 +168,6 @@ class OrderGraphBuilder final : public VNVisitor {
 
         // Analyze logic underneath
         iterateChildren(nodep);
-
-        //
-        m_inClocked = false;
-        m_domainp = nullptr;
-        m_hybridp = nullptr;
     }
     void visit(AstNodeVarRef* nodep) override {
         // As we explicitly not visit (see ignored nodes below) any subtree that is not relevant
@@ -186,7 +186,8 @@ class OrderGraphBuilder final : public VNVisitor {
         const bool prevCon = varscp->user2() & VU_CON;
 
         // Compute whether the variable is produced (written) here
-        bool gen = !prevGen && nodep->access().isWriteOrRW();
+        const bool gen
+            = !prevGen && nodep->access().isWriteOrRW() && !varscp->varp()->ignoreSchedWrite();
 
         // Compute whether the value is consumed (read) here
         bool con = false;
@@ -213,7 +214,7 @@ class OrderGraphBuilder final : public VNVisitor {
         // Variable is produced
         if (gen) {
             // Update VarUsage
-            varscp->user2(varscp->user2() | VU_GEN);
+            varscp->user2Or(VU_GEN);
             // Add edges for produced variables
             if (m_inPost) {
                 if (!varscp->varp()->ignorePostWrite()) {
@@ -231,7 +232,7 @@ class OrderGraphBuilder final : public VNVisitor {
                 // Add edge from produced VarPostVertex -> to producing LogicVertex
                 OrderVarVertex* const postVxp = getVarVertex(varscp, VarVertexType::POST);
                 m_graphp->addHardEdge(postVxp, m_logicVxp, WEIGHT_POST);
-            } else if (m_inPre) {  // AstAssignPre
+            } else if (m_inPre) {  // AstAlwaysPre
                 // Add edge from producing LogicVertex -> produced VarPordVertex
                 OrderVarVertex* const ordVxp = getVarVertex(varscp, VarVertexType::PORD);
                 m_graphp->addHardEdge(m_logicVxp, ordVxp, WEIGHT_NORMAL);
@@ -252,10 +253,17 @@ class OrderGraphBuilder final : public VNVisitor {
         // Variable is consumed
         if (con) {
             // Update VarUsage
-            varscp->user2(varscp->user2() | VU_CON);
+            varscp->user2Or(VU_CON);
             // Add edges
-            if (!m_inClocked || m_inPost) {
+            if (m_inPost) {
                 // Combinational logic
+                if (!varscp->varp()->ignorePostRead() && m_readTriggersCombLogic(varscp)) {
+                    // Ignore explicit sensitivities
+                    OrderVarVertex* const varVxp = getVarVertex(varscp, VarVertexType::STD);
+                    // Add edge from consumed VarStdVertex -> to consuming LogicVertex
+                    m_graphp->addHardEdge(varVxp, m_logicVxp, WEIGHT_MEDIUM);
+                }
+            } else if (!m_inClocked) {  // Combinational logic
                 if (m_readTriggersCombLogic(varscp)) {
                     // Ignore explicit sensitivities
                     OrderVarVertex* const varVxp = getVarVertex(varscp, VarVertexType::STD);
@@ -263,7 +271,7 @@ class OrderGraphBuilder final : public VNVisitor {
                     m_graphp->addHardEdge(varVxp, m_logicVxp, WEIGHT_MEDIUM);
                 }
             } else if (m_inPre) {
-                // AstAssignPre logic
+                // AstAlwaysPre logic
                 // Add edge from consumed VarPreVertex -> to consuming LogicVertex
                 // This one is cutable (vs the producer) as there's only one such consumer,
                 // but may be many producers
@@ -273,7 +281,7 @@ class OrderGraphBuilder final : public VNVisitor {
                 // Sequential (clocked) logic
                 // Add edge from consuming LogicVertex -> to consumed VarPreVertex
                 // Generation of 'pre' because we want to indicate it should be before
-                // AstAssignPre
+                // AstAlwaysPre
                 OrderVarVertex* const preVxp = getVarVertex(varscp, VarVertexType::PRE);
                 m_graphp->addHardEdge(m_logicVxp, preVxp, WEIGHT_NORMAL);
                 // Add edge from consuming LogicVertex -> to consumed VarPostVertex
@@ -297,11 +305,17 @@ class OrderGraphBuilder final : public VNVisitor {
     void visit(AstAlways* nodep) override {  //
         iterateLogic(nodep);
     }
+    void visit(AstAlwaysPre* nodep) override {
+        UASSERT_OBJ(!m_inPre, nodep, "Should not nest");
+        VL_RESTORER(m_inPre);
+        m_inPre = true;
+        iterateLogic(nodep);
+    }
     void visit(AstAlwaysPost* nodep) override {
         UASSERT_OBJ(!m_inPost, nodep, "Should not nest");
+        VL_RESTORER(m_inPost);
         m_inPost = true;
         iterateLogic(nodep);
-        m_inPost = false;
     }
     void visit(AstAlwaysObserved* nodep) override {  //
         iterateLogic(nodep);
@@ -313,39 +327,18 @@ class OrderGraphBuilder final : public VNVisitor {
         nodep->v3fatalSrc("AstFinal should not need ordering");
     }  // LCOV_EXCL_STOP
 
-    //--- Logic akin go SystemVerilog continuous assignments
-    void visit(AstAssignAlias* nodep) override {  //
-        iterateLogic(nodep);
-    }
-    void visit(AstAssignW* nodep) override { iterateLogic(nodep); }
-    void visit(AstAssignPre* nodep) override {
-        UASSERT_OBJ(!m_inPre, nodep, "Should not nest");
-        VL_RESTORER(m_inPre);
-        m_inPre = true;
-        iterateLogic(nodep);
-    }
-    void visit(AstAssignPost* nodep) override {
-        UASSERT_OBJ(!m_inPost, nodep, "Should not nest");
-        VL_RESTORER(m_inPost);
-        m_inPost = true;
-        iterateLogic(nodep);
-    }
-
     //--- Verilator concoctions
-    void visit(AstAlwaysPublic* nodep) override {  //
-        iterateLogic(nodep);
-    }
     void visit(AstCoverToggle* nodep) override {  //
         iterateLogic(nodep);
     }
 
     //--- Ignored nodes
     void visit(AstVar*) override {}
-    void visit(AstVarScope* nodep) override {}
-    void visit(AstCell*) override {}  // Only interested in the respective AstScope
-    void visit(AstTypeTable*) override {}
-    void visit(AstConstPool*) override {}
-    void visit(AstClass*) override {}
+    void visit(AstVarScope* nodep) override { nodep->v3fatalSrc("Should not reach V3Order"); }
+    void visit(AstCell* nodep) override { nodep->v3fatalSrc("Should not reach V3Order"); }
+    void visit(AstTypeTable* nodep) override { nodep->v3fatalSrc("Should not reach V3Order"); }
+    void visit(AstConstPool* nodep) override { nodep->v3fatalSrc("Should not reach V3Order"); }
+    void visit(AstClass* nodep) override { nodep->v3fatalSrc("Should not reach V3Order"); }
     void visit(AstCFunc*) override {
         // Calls to DPI exports handled with AstCCall. /* verilator public */ functions are
         // ignored for now (and hence potentially mis-ordered), but could use the same or

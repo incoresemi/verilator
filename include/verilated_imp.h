@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2009-2024 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2009-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=========================================================================
@@ -363,7 +363,7 @@ private:
     VerilatedFpList fdToFpList(IData fdi) VL_REQUIRES(m_fdMutex) {
         VerilatedFpList fp;
         // cppverilator-suppress integerOverflow shiftTooManyBitsSigned
-        if ((fdi & (1 << 31)) != 0) {
+        if (VL_BITISSET_I(fdi, 31)) {
             // Non-MCD case
             const IData idx = fdi & VL_MASK_I(31);
             switch (idx) {
@@ -523,6 +523,11 @@ public:
         auto& scopes = map[fromp];
         const auto it = find(scopes.begin(), scopes.end(), top);
         if (it != scopes.end()) scopes.erase(it);
+    }
+    static void hierarchyClear() VL_MT_SAFE {
+        const VerilatedLockGuard lock{s().m_hierMapMutex};
+        VerilatedHierarchyMap& map = s().m_hierMap;
+        map.clear();
     }
     static const VerilatedHierarchyMap* hierarchyMap() VL_MT_SAFE_POSTINIT {
         // Thread save only assuming this is called only after model construction completed

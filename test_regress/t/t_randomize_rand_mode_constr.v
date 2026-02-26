@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Antmicro.
+// This file ONLY is placed under the Creative Commons Public Domain
+// SPDX-FileCopyrightText: 2024 Antmicro
 // SPDX-License-Identifier: CC0-1.0
 
 class Foo;
@@ -25,16 +25,23 @@ class Qux extends Bar;
   constraint y_gt_x {y > x;};
   constraint y_lt_10 {y < 10;};
 
+  function bit get_rand_mode();
+     return bit'(y.rand_mode());
+  endfunction
+
   function void test;
     logic ok = 0;
     x.rand_mode(1);
-    if (x.rand_mode == 0) $stop;
+    if (x.rand_mode != 1) $stop;  // Note no rand_mode parens
+    if (get_rand_mode() != 1) $stop;
     y.rand_mode(0);
-    if (y.rand_mode == 1) $stop;
+    if (y.rand_mode() != 0) $stop;  // Note has rand_mode parens
+
     foo.a.rand_mode(0);
-    if (foo.a.rand_mode == 1) $stop;
+    if (foo.a.rand_mode != 0) $stop;  // Note no rand_mode parens
     foo.b.rand_mode(1);
-    if (foo.b.rand_mode == 0) $stop;
+    if (foo.b.rand_mode() != 1) $stop;  // Note has rand_mode parens
+
     for (int i = 0; i < 20; ++i) begin
        x = 4;
        y = 8;
@@ -92,11 +99,11 @@ endclass
 
 module t;
   initial begin
-    logic ok = 0;
-    int res;
-    Baz baz = new;
-    Qux qux = new;
-    Quux quux = new;
+    automatic logic ok = 0;
+    automatic int res;
+    automatic Baz baz = new;
+    automatic Qux qux = new;
+    automatic Quux quux = new;
 
     baz.test;
     qux.test;

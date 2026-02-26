@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -20,7 +20,7 @@ function int get_val_set_5(ref int x);
    return y;
 endfunction
 
-module t (/*AUTOARG*/);
+module t;
    int b;
    int arr[1];
    MyInt mi;

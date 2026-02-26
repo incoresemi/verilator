@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 interface Iface;
@@ -29,8 +29,8 @@ module main;
       if (t.mod0.io != 1'b1) $stop;
       if (t.mod1.cb.io != 1'b0) $stop;
       #1
-      if (t.mod0.cb.io != 1'b1) $stop;
-      if (t.mod1.cb.io != 1'b1) $stop;
+      if (t.mod0.cb.io != 1'b0) $stop;
+      if (t.mod1.cb.io != 1'b0) $stop;
       if (t.mod1.cb.inp != 1'b1) $stop;
       #8;
       t.mod0.inp = 1'b0;

@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2010-2011 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2010-2011 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -34,38 +34,6 @@
 // These require the above. Comment prevents clang-format moving them
 #include "TestSimulator.h"
 #include "TestVpi.h"
-
-// __FILE__ is too long
-#define FILENM "t_vpi_package.cpp"
-
-#define DEBUG \
-    if (0) printf
-
-#define CHECK_RESULT_NZ(got) \
-    if (!(got)) { \
-        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", FILENM, __LINE__); \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT_Z(got) \
-    if (got) { \
-        printf("%%Error: %s:%d: GOT = !NULL  EXP = NULL\n", FILENM, __LINE__); \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT(got, exp) \
-    if ((got) != (exp)) { \
-        std::cout << std::dec << "%Error: " << FILENM << ":" << __LINE__ << ": GOT = " << (got) \
-                  << "   EXP = " << (exp) << std::endl; \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT_CSTR(got, exp) \
-    if (std::strcmp((got), (exp))) { \
-        printf("%%Error: %s:%d: GOT = '%s'   EXP = '%s'\n", FILENM, __LINE__, \
-               (got) ? (got) : "<null>", (exp) ? (exp) : "<null>"); \
-        return __LINE__; \
-    }
 
 extern "C" {
 int count_params(TestVpiHandle& handle, int expectedParams) {
@@ -148,10 +116,13 @@ int mon_check() {
 
     CHECK_RESULT_Z(count_params(unitHandle, 1));
     CHECK_RESULT_Z(count_params(pkgHandle, 2));
-    CHECK_RESULT_Z(count_params(tHandle, 3));
+    CHECK_RESULT_Z(count_params(tHandle, 6));
 
     CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("someOtherInt"), tHandle))
     CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("t.someOtherInt"), NULL))
+    CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("$root.t.someOtherInt"), NULL))
+    CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("someString"), tHandle))
+    CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("t.someString"), NULL))
     CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("someInt"), pkgHandle))
     CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("somepackage::someInt"), NULL))
     CHECK_RESULT_Z(check_handle(const_cast<PLI_BYTE8*>("dollarUnitInt"), unitHandle))

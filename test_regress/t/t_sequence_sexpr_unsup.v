@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -52,9 +52,6 @@ module t (/*AUTOARG*/
       a intersect b;
    endsequence
 
-   sequence s_uni_cycdelay_int;
-      ## 1 b;
-   endsequence
    sequence s_uni_cycdelay_id;
       ## DELAY b;
    endsequence
@@ -71,9 +68,6 @@ module t (/*AUTOARG*/
       ## [+] b;
    endsequence
 
-   sequence s_cycdelay_int;
-      a ## 1 b;
-   endsequence
    sequence s_cycdelay_id;
       a ## DELAY b;
    endsequence

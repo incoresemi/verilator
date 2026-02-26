@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -108,7 +108,7 @@ public:
         case REACTIVE | OBSERVED | INPUT | NBA: return "plum";
         case REACTIVE | OBSERVED | ACTIVE | NBA: return "lightSeaGreen";
         case REACTIVE | OBSERVED | INPUT | ACTIVE | NBA: return "gray50";
-        default: v3fatal("There are only 5 region bits"); return "";
+        default: v3fatalSrc("There are only 5 region bits"); return "";
         }
     }
     // LCOV_EXCL_STOP
@@ -151,7 +151,7 @@ public:
         , m_vscp{vscp} {
         // Top level inputs are
         if (varp()->isPrimaryInish() || varp()->isSigUserRWPublic() || varp()->isWrittenByDpi()
-            || varp()->sensIfacep()) {
+            || varp()->sensIfacep() || varp()->isVirtIface()) {
             addDrivingRegions(INPUT);
         }
         // Currently we always execute suspendable processes at the beginning of
@@ -188,7 +188,7 @@ std::unique_ptr<Graph> buildGraph(const LogicRegions& logicRegions) {
     };
 
     const auto addLogic = [&](RegionFlags region, AstScope* scopep, AstActive* activep) {
-        AstSenTree* const senTreep = activep->sensesp();
+        AstSenTree* const senTreep = activep->sentreep();
 
         // Predicate for whether a read of the given variable triggers this block
         std::function<bool(AstVarScope*)> readTriggersThisLogic;
@@ -231,8 +231,8 @@ std::unique_ptr<Graph> buildGraph(const LogicRegions& logicRegions) {
                 // If written, add logic -> var edge
                 // Note: See V3Order for why AlwaysPostponed is safe to be ignored. We ignore it
                 // as otherwise we would end up with a false cycle.
-                if (refp->access().isWriteOrRW() && !vscp->user2SetOnce()
-                    && !VN_IS(nodep, AlwaysPostponed)) {  //
+                if (refp->access().isWriteOrRW() && !refp->varp()->ignoreSchedWrite()
+                    && !vscp->user2SetOnce() && !VN_IS(nodep, AlwaysPostponed)) {  //
                     addEdge(lvtxp, vvtxp);
                 }
             });

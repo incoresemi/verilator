@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2001-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2001-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=============================================================================
@@ -233,7 +233,7 @@ private:
         // Little selftest
 #define SELF_CHECK(got, exp) \
     do { \
-        if ((got) != (exp)) VL_FATAL_MT(__FILE__, __LINE__, "", "%Error: selftest"); \
+        if ((got) != (exp)) VL_FATAL_MT(__FILE__, __LINE__, "", "selftest"); \
     } while (0)
         SELF_CHECK(combineHier("a.b.c", "a.b.c"), "a.b.c");
         SELF_CHECK(combineHier("a.b.c", "a.b"), "a.b*");
@@ -255,17 +255,21 @@ private:
 
 public:
     // PUBLIC METHODS
+    // cppcheck-suppress duplInheritedMember
     std::string defaultFilename() VL_MT_SAFE { return m_contextp->coverageFilename(); }
+    // cppcheck-suppress duplInheritedMember
     void forcePerInstance(const bool flag) VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
         m_forcePerInstance = flag;
     }
+    // cppcheck-suppress duplInheritedMember
     void clear() VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
         clearGuts();
     }
+    // cppcheck-suppress duplInheritedMember
     void clearNonMatch(const char* const matchp) VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
@@ -281,10 +285,11 @@ public:
             m_items = newlist;
         }
     }
+    // cppcheck-suppress duplInheritedMember
     void zero() VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
-        for (const auto& itemp : m_items) itemp->zero();
+        for (const VerilatedCovImpItem* const itemp : m_items) itemp->zero();
     }
 
     // We assume there's always call to i/f/p in that order
@@ -307,15 +312,17 @@ public:
         valps[0] = m_insertFilenamep;
         const std::string linestr = std::to_string(m_insertLineno);
         ckeyps[1] = "lineno";
+        // cppcheck-suppress autoVariables  // Used only below for insert
         valps[1] = linestr.c_str();
         // Default page if not specified
         const char* fnstartp = m_insertFilenamep;
         while (const char* foundp = std::strchr(fnstartp, '/')) fnstartp = foundp + 1;
         const char* fnendp = fnstartp;
-        for (; *fnendp && *fnendp != '.'; fnendp++) {}
+        for (; *fnendp && *fnendp != '.'; ++fnendp) {}
         const size_t page_len = fnendp - fnstartp;
         const std::string page_default = "sp_user/" + std::string{fnstartp, page_len};
         ckeyps[2] = "page";
+        // cppcheck-suppress autoVariables  // Used only below for insert
         valps[2] = page_default.c_str();
 
         // Keys -> strings
@@ -357,6 +364,7 @@ public:
         m_insertp = nullptr;
     }
 
+    // cppcheck-suppress duplInheritedMember
     void write(const std::string& filename) VL_MT_SAFE_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock{m_mutex};
@@ -390,6 +398,10 @@ public:
                         hier = val;
                     } else {
                         // Print it
+                        if (key == "page") {
+                            const std::string type = val.substr(2, val.find('/') - 2);
+                            name += keyValueFormatter(VL_CIK_TYPE, type);
+                        }
                         name += keyValueFormatter(key, val);
                     }
                 }

@@ -1,11 +1,11 @@
 // DESCRIPTION: Verilator: Functionally demonstrate an array of interfaces
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 interface foo_intf;
-   logic a;
+   bit a;
 
    modport source (
       output a
@@ -29,9 +29,9 @@ module t (/*AUTOARG*/
 
    localparam N = 5;
 
-   logic [N-1:0] a_in;
-   logic [N-1:0] a_out;
-   logic [N-1:0] ack_out;
+   bit [N-1:0] a_in;
+   bit [N-1:0] a_out;
+   bit [N-1:0] ack_out;
 
    foo_intf foos [N-1:0] ();
 

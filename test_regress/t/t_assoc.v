@@ -1,13 +1,13 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2019 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
 `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
 `define checks(gotv,expv) do if ((gotv) != (expv)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
-`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) !== (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
+`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) != (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
 
 module t (/*AUTOARG*/
    // Inputs
@@ -37,14 +37,16 @@ module t (/*AUTOARG*/
          v = a[4'd3]; `checks(v, "fooed");
          v = a[4'd2]; `checks(v, "bared");
          i = a.exists(4'd0); `checkh(i, 0);
+         if (a.exists(4'd0)) $stop;  // Check no width warning
          i = a.exists(4'd2); `checkh(i, 1);
+         if (!a.exists(4'd2)) $stop;  // Check no width warning
          i = a.first(k); `checkh(i, 1); `checks(k, 4'd2);
          i = a.next(k); `checkh(i, 1); `checks(k, 4'd3);
          i = a.next(k); `checkh(i, 0);
          i = a.last(k); `checkh(i, 1); `checks(k, 4'd3);
          i = a.prev(k); `checkh(i, 1); `checks(k, 4'd2);
          i = a.prev(k); `checkh(i, 0);
-         `checkp(a, "'{'h2:\"bared\", 'h3:\"fooed\"} ");
+         `checkp(a, "'{'h2:\"bared\", 'h3:\"fooed\"}");
 
          a.first(k); `checks(k, 4'd2);
          a.next(k); `checks(k, 4'd3);
@@ -80,7 +82,7 @@ module t (/*AUTOARG*/
          i = a.prev(k); `checkh(i, 1); `checks(k, "bar");
          i = a.prev(k); `checkh(i, 0);
          `checkp(a["foo"], "\"fooed\"");
-         `checkp(a, "'{\"bar\":\"bared\", \"foo\":\"fooed\"} ");
+         `checkp(a, "'{\"bar\":\"bared\", \"foo\":\"fooed\"}");
 
          a.delete("bar");
          i = a.size(); `checkh(i, 1);

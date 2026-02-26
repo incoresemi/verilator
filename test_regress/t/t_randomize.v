@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 class Packet;
@@ -50,14 +50,14 @@ class Packet;
 
 endclass
 
-module t (/*AUTOARG*/);
+module t;
 
    Packet p;
 
    initial begin
 
-      int v;
-      bit if_4 = '0;
+      automatic int v;
+      automatic bit if_4 = '0;
       // TODO not testing constrained values
       v = p.randomize();
       if (v != 1) $stop;
@@ -65,6 +65,10 @@ module t (/*AUTOARG*/);
       if (v != 1) $stop;
       v = p.randomize() with { if_4 == local::if_4; header == 2; };
       if (v != 1) $stop;
+      // verilator lint_off WIDTH
+      assert(p.randomize && p.randomize);  // No parens, math
+      // verilator lint_on WIDTH
+
       // TODO not testing other randomize forms as unused in UVM
 
       $write("*-* All Finished *-*\n");

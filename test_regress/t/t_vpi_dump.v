@@ -1,9 +1,9 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Copyright 2010 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2010 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 /* verilator public_on */
@@ -31,8 +31,8 @@ module t (  /*AUTOARG*/
 );
 
 
-   parameter int do_generate = 1;
-   parameter longint long_int = 64'h123456789abcdef;
+   parameter int DO_GENERATE = 1;
+   parameter longint LONG_INT = 64'h123456789abcdef;
 
 
    input clk;
@@ -65,7 +65,7 @@ module t (  /*AUTOARG*/
 
    t_bus bus1;
 
-   sub sub ();
+   ModSub sub ();
 
    TestInterface intf_arr[2]();
 
@@ -80,7 +80,7 @@ module t (  /*AUTOARG*/
    genvar i;
    generate
       for (i = 1; i <= 2; i = i + 1) begin : arr
-         arr #(.LENGTH(i)) arr ();
+         ModArr #(.LENGTH(i)) arr ();
       end
 
       for (i = 1; i <= 3; i = i + 1) begin : outer_scope
@@ -90,38 +90,38 @@ module t (  /*AUTOARG*/
          genvar j;
          for (j = 1; j <= 3; j = j + 1) begin : inner_scope
             parameter int scoped_param_inner = scoped_param + 1;
-            arr #(.LENGTH(scoped_param_inner)) arr ();
+            ModArr #(.LENGTH(scoped_param_inner)) arr ();
 
          end
       end
    endgenerate
 
-   sub_wrapper sub_wrap ();
+   ModSubWrapper sub_wrap ();
 
 
    generate
-      if (do_generate == 1) begin : cond_scope
-         sub scoped_sub ();
+      if (DO_GENERATE == 1) begin : cond_scope
+         ModSub scoped_sub ();
          parameter int scoped_wire = 1;
 
-         sub_wrapper sub_wrap_gen ();
+         ModSubWrapper sub_wrap_gen ();
       end else begin : cond_scope_else
-         sub scoped_sub_else ();
+         ModSub scoped_sub_else ();
       end
    endgenerate
 
 endmodule : t
 
-module sub;
+module ModSub;
    reg subsig1;
    reg subsig2;
 `ifdef IVERILOG
    // stop icarus optimizing signals away
    wire redundant = subsig1 | subsig2;
 `endif
-endmodule : sub
+endmodule : ModSub
 
-module arr;
+module ModArr;
 
    parameter LENGTH = 1;
 
@@ -142,9 +142,9 @@ module arr;
       check <= 0;
    end
 
-endmodule : arr
+endmodule : ModArr
 
 
-module sub_wrapper;
-   sub my_sub ();
+module ModSubWrapper;
+   ModSub my_sub ();
 endmodule

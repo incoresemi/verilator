@@ -1,6 +1,6 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Antmicro.
+// This file ONLY is placed under the Creative Commons Public Domain
+// SPDX-FileCopyrightText: 2024 Antmicro
 // SPDX-License-Identifier: CC0-1.0
 
 #include VM_PREFIX_INCLUDE
@@ -30,7 +30,7 @@ int sc_main(int argc, char* argv[]) {
     tb->final();
     VL_DO_DANGLING(delete tb, tb);
 
-    if (pass) { VL_PRINTF("*-* All Finished *-*\n"); }
+    if (pass) VL_PRINTF("*-* All Finished *-*\n");
 
     return 0;
 }

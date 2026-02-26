@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
@@ -12,6 +12,9 @@ module t;
    int valuea;
    int valueb;
    int valuec;
+   int igna;
+   int ignb;
+   int ignc;
 
    initial begin
       // $random unlike $urandom updates the value if given
@@ -32,7 +35,29 @@ module t;
 
       valuea = $urandom(10);
       valueb = $urandom(10);
-      if (valuea !== valueb) $stop;
+      valuec = $urandom(10);
+      if (valuea !== valueb && valueb != valuec) $stop;
+
+      valuea = $urandom(10);
+      valueb = $urandom(11);
+      valuec = $urandom(12);
+      if (valuea == valueb && valueb == valuec) $stop;  // May false fail 1 in 1^64
+
+      $urandom(10);
+      valuea = $urandom;
+      $urandom(10);
+      valueb = $urandom;
+      $urandom(10);
+      valuec = $urandom;
+      if (valuea != valueb && valueb != valuec) $stop;  // May false fail 1 in 1^64
+
+      igna = $urandom(10);
+      valuea = $urandom;
+      ignb = $urandom(10);
+      valueb = $urandom;
+      ignc = $urandom(10);
+      valuec = $urandom;
+      if (valuea != valueb && valueb != valuec) $stop;  // May false fail 1 in 1^64
 
       valuea = $urandom(10);
       valueb = $urandom();

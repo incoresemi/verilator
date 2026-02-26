@@ -1,10 +1,10 @@
 // DESCRIPTION: Verilator: Check initialisation of cloned clock variables
 //
-// This tests issue #1327 (Strange initialisation behaviour with
+// This tests issue #1327 (Strange initialization behavior with
 // "VinpClk" cloned clock variables)
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2018 by Rupert Swarbrick (Argon Design).
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2018 Rupert Swarbrick (Argon Design)
 // SPDX-License-Identifier: CC0-1.0
 
 // bug1327

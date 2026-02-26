@@ -2,8 +2,8 @@
 //
 // Simple demonstration of an UNOPTFLAT combinatorial loop, using just 2 bits.
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2013 by Jeremy Bennett.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2013 Jeremy Bennett
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -13,10 +13,6 @@ module t (/*AUTOARG*/
    input clk;
 
    wire [1:0] x = { x[0], clk };
-
-   initial begin
-      x = 0;
-   end
 
    always @(posedge clk or negedge clk) begin
 

@@ -2,8 +2,8 @@
 //
 // This code exercises the various enumeration methods
 //
-// This file ONLY is placed into the Public Domain, for any use, without
-// warranty.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // Contributed 2012 by M W Lund, Atmel Corporation and Jeremy Bennett, Embecosm.
@@ -76,7 +76,7 @@ module test (/*AUTOARG*/
 
    // Use the enumeration size to initialize a dynamic array
    t_pinid  e;
-   int   myarray1 [] = new [e.num];
+   int myarray1 [] = new [e.num];
 
    always @(posedge clk) begin
 
@@ -87,7 +87,7 @@ module test (/*AUTOARG*/
       e = e.first;
 
       forever begin
-         myarray1[e] <= e.prev;
+         myarray1[e] = e.prev;
 
 `ifdef TEST_VERBOSE
          $write ("myarray1[%d] (enum %s) = %d\n", e, e.name, myarray1[e]);

@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2003 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2003 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `timescale 1ns/1ns
@@ -29,6 +29,21 @@ module t (/*AUTOARG*/
                 $time, $time, $time, $time);
          $timeformat(-9, 3, "ns", 8);
          $write("-9,3,ns,8: [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
+                $time, $time, $time, $time);
+         $timeformat(-9, 3, "ns");
+         $write("-9,3,ns  : [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
+                $time, $time, $time, $time);
+         $timeformat(-9, 3);
+         $write("-9,3:      [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
+                $time, $time, $time, $time);
+         $timeformat(-9);
+         $write("-9:        [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
+                $time, $time, $time, $time);
+         $timeformat();
+         $write(":          [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
+                $time, $time, $time, $time);
+         $timeformat(-9,,,);
+         $write("-9,,,:     [%0t] 0t time [%t] No0 time  p=%p 0p=%0p\n",
                 $time, $time, $time, $time);
          $write("\n");
          $write("*-* All Finished *-*\n");

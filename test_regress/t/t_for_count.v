@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2004 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2004 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -51,7 +51,7 @@ module t (/*AUTOARG*/
    end
 
    // While loop
-   integer w;
+   int w;
    initial begin
       while (w<10) w=w+1;
       if (w!=10) $stop;
@@ -61,7 +61,7 @@ module t (/*AUTOARG*/
    end
 
    // Do-While loop
-   integer dw;
+   int dw;
    initial begin
       do dw=dw+1; while (dw<10);
       if (dw!=10) $stop;

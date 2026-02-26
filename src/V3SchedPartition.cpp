@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -26,7 +26,7 @@
 // is then assigned to the 'act' region, and all other logic is assigned to
 // the 'nba' region.
 //
-// For later practical purposes, AstAssignPre logic that would be assigned to
+// For later practical purposes, AstAlwaysPre logic that would be assigned to
 // the 'act' region is returned separately. Nevertheless, this logic is part of
 // the 'act' region.
 //
@@ -103,6 +103,8 @@ public:
         : V3GraphVertex{graphp}
         , m_vscp{vscp} {}
 
+    AstVar* varp() const { return m_vscp->varp(); }
+
     // LCOV_EXCL_START // Debug code
     string name() const override VL_MT_STABLE { return m_vscp->name(); }
     string dotShape() const override {
@@ -162,9 +164,11 @@ class SchedGraphBuilder final : public VNVisitor {
                 SchedSenVertex* const vtxp = new SchedSenVertex{m_graphp, senItemp};
 
                 // Connect up the variable references
-                senItemp->sensp()->foreach([&](AstVarRef* refp) {
-                    new V3GraphEdge{m_graphp, getVarVertex(refp->varScopep()), vtxp, 1};
-                });
+                if (senItemp->sensp()) {
+                    senItemp->sensp()->foreach([&](AstVarRef* refp) {
+                        new V3GraphEdge{m_graphp, getVarVertex(refp->varScopep()), vtxp, 1};
+                    });
+                }
 
                 // Store back to hash map so we can find it next time
                 pair.first->second = vtxp;
@@ -198,7 +202,7 @@ class SchedGraphBuilder final : public VNVisitor {
             if (vrefp->access().isReadOrRW() && m_readTriggersThisLogic(vscp)) {
                 new V3GraphEdge{m_graphp, getVarVertex(vscp), logicVtxp, 10};
             }
-            if (vrefp->access().isWriteOrRW()) {
+            if (vrefp->access().isWriteOrRW() && !vrefp->varp()->ignoreSchedWrite()) {
                 new V3GraphEdge{m_graphp, logicVtxp, getVarVertex(vscp), 10};
             }
         });
@@ -215,7 +219,7 @@ class SchedGraphBuilder final : public VNVisitor {
 
     // VISIT methods
     void visit(AstActive* nodep) override {
-        AstSenTree* const senTreep = nodep->sensesp();
+        AstSenTree* const senTreep = nodep->sentreep();
         UASSERT_OBJ(senTreep->hasClocked() || senTreep->hasCombo() || senTreep->hasHybrid(), nodep,
                     "Unhandled");
         UASSERT_OBJ(!m_senTreep, nodep, "Should not nest");
@@ -228,19 +232,17 @@ class SchedGraphBuilder final : public VNVisitor {
             });
         }
 
+        VL_RESTORER(m_senTreep);
         m_senTreep = senTreep;
         iterateChildrenConst(nodep);
-        m_senTreep = nullptr;
     }
 
     void visit(AstNodeProcedure* nodep) override { visitLogic(nodep); }
     void visit(AstNodeAssign* nodep) override { visitLogic(nodep); }
     void visit(AstCoverToggle* nodep) override { visitLogic(nodep); }
-    void visit(AstAlwaysPublic* nodep) override { visitLogic(nodep); }
 
     // Pre and Post logic are handled separately
-    void visit(AstAssignPre* nodep) override {}
-    void visit(AstAssignPost* nodep) override {}
+    void visit(AstAlwaysPre* nodep) override {}
     void visit(AstAlwaysPost* nodep) override {}
 
     // LCOV_EXCL_START
@@ -315,6 +317,12 @@ void colorActiveRegion(V3Graph& graph) {
         // Enqueue all parent vertices that feed this vertex.
         for (V3GraphEdge& edge : vtx.inEdges()) queue.push_back(edge.fromp());
 
+        // Mark top level ports that drive a sensitivity list
+        if (SchedVarVertex* const vvtxp = vtx.cast<SchedVarVertex>()) {
+            AstVar* const varp = vvtxp->varp();
+            if (varp->isPrimaryIO()) varp->setPrimaryClock();
+        }
+
         // If this is a logic vertex, also enqueue all variable vertices that are driven from this
         // logic. This will ensure that if a variable is set in the active region, then all
         // settings of that variable will be in the active region.
@@ -331,7 +339,7 @@ void colorActiveRegion(V3Graph& graph) {
 
 LogicRegions partition(LogicByScope& clockedLogic, LogicByScope& combinationalLogic,
                        LogicByScope& hybridLogic) {
-    UINFO(2, __FUNCTION__ << ": " << endl);
+    UINFO(2, __FUNCTION__ << ":");
 
     // Build the graph
     const std::unique_ptr<V3Graph> graphp
@@ -362,24 +370,25 @@ LogicRegions partition(LogicByScope& clockedLogic, LogicByScope& combinationalLo
             nodep->foreach([](const AstNodeVarRef* vrefp) {
                 AstVarScope* const vscp = vrefp->varScopep();
                 if (vrefp->access().isReadOrRW()) vscp->user1(true);
-                if (vrefp->access().isWriteOrRW()) vscp->user2(true);
+                if (vrefp->access().isWriteOrRW() && !vrefp->varp()->ignoreSchedWrite())
+                    vscp->user2(true);
             });
         };
 
         for (const auto& pair : result.m_act) {
             AstActive* const activep = pair.second;
-            markVars(activep->sensesp());
+            markVars(activep->sentreep());
             markVars(activep);
         }
 
-        // AstAssignPre, AstAssignPost and AstAlwaysPost should only appear under a clocked
+        // AstAlwaysPre and AstAlwaysPost should only appear under a clocked
         // AstActive, and should be the only thing left at this point.
         for (const auto& pair : clockedLogic) {
             AstScope* const scopep = pair.first;
             AstActive* const activep = pair.second;
             for (AstNode *nodep = activep->stmtsp(), *nextp; nodep; nodep = nextp) {
                 nextp = nodep->nextp();
-                if (AstAssignPre* const logicp = VN_CAST(nodep, AssignPre)) {
+                if (AstAlwaysPre* const logicp = VN_CAST(nodep, AlwaysPre)) {
                     bool toActiveRegion = false;
                     logicp->foreach([&](const AstNodeVarRef* vrefp) {
                         AstVarScope* const vscp = vrefp->varScopep();
@@ -393,12 +402,12 @@ LogicRegions partition(LogicByScope& clockedLogic, LogicByScope& combinationalLo
                     });
                     LogicByScope& lbs = toActiveRegion ? result.m_pre : result.m_nba;
                     logicp->unlinkFrBack();
-                    lbs.add(scopep, activep->sensesp(), logicp);
+                    lbs.add(scopep, activep->sentreep(), logicp);
                 } else {
-                    UASSERT_OBJ(VN_IS(nodep, AssignPost) || VN_IS(nodep, AlwaysPost), nodep,
+                    UASSERT_OBJ(VN_IS(nodep, AlwaysPost), nodep,
                                 "Unexpected node type " << nodep->typeName());
                     nodep->unlinkFrBack();
-                    result.m_nba.add(scopep, activep->sensesp(), nodep);
+                    result.m_nba.add(scopep, activep->sentreep(), nodep);
                 }
             }
         }

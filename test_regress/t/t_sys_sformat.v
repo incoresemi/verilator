@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2008 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2008 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
@@ -58,7 +58,7 @@ module t;
 
       $swrite(str2, "lib=%l");
 `ifdef TEST_VERBOSE  $display("chkl %0s",str2);  `endif
-      if (str2 !== "lib=t") $stop;
+      if (str2 !== "lib=work.t") $stop;
 
       str3 = $sformatf("u=%u", {"a","b","c","d"}); // Value selected so is printable
 `ifdef TEST_VERBOSE  $display("chku %s", str3);  `endif

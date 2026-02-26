@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module M #(
@@ -23,7 +23,7 @@ module N #(
     assign o = i;
 endmodule
 
-module t (/*AUTOARG*/);
+module t;
 
   wire i1, o1, i2, o2, i3, o3, i4, o4, i5, o5, i6, o6;
 

@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2020 by Wilson Snyder and Marlon James. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder and Marlon James
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -70,22 +70,6 @@ bool verbose = false;
 #else
 #define END_TEST return __LINE__;
 #endif
-
-#define CHECK_RESULT_NZ(got) \
-    if (!(got)) { \
-        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", __FILE__, __LINE__); \
-        got_error = true; \
-        END_TEST \
-    }
-
-// Use cout to avoid issues with %d/%lx etc
-#define CHECK_RESULT(got, exp) \
-    if ((got) != (exp)) { \
-        std::cout << std::dec << "%Error: " << __FILE__ << ":" << __LINE__ << ": GOT = " << (got) \
-                  << "   EXP = " << (exp) << std::endl; \
-        got_error = true; \
-        END_TEST \
-    }
 
 #define STRINGIFY_CB_CASE(_cb) \
     case _cb: return #_cb
@@ -169,7 +153,7 @@ static int register_cb(const int next_state) {
 }
 
 void reset_expected() {
-    for (int idx = 0; idx < CB_COUNT; idx++) { callbacks_expected_called[idx] = false; }
+    for (int idx = 0; idx < CB_COUNT; idx++) callbacks_expected_called[idx] = false;
 }
 
 void cb_will_be_called(const int cb) {
@@ -307,7 +291,7 @@ static int register_test_callback(p_cb_data data) {
 #ifdef IS_VPI
 
 static int end_of_sim_cb(p_cb_data cb_data) {
-    if (!got_error) { fprintf(stdout, "*-* All Finished *-*\n"); }
+    if (!got_error) fprintf(stdout, "*-* All Finished *-*\n");
     return 0;
 }
 

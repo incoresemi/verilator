@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2014 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -55,12 +55,12 @@ module sub (/*AUTOARG*/
 
    always @* begin
       case (in[3:0]) inside
-        default:          {out1,out2} = {1'b0,5'h0F};   // Note not last item
+        default           {out1,out2} = {1'b0,5'h0F};   // Note not last item, no : to cover parser
         4'h1, 4'h2, 4'h3: {out1,out2} = {1'b1,5'h01};
         4'h4:             {out1,out2} = {1'b1,5'h04};
-        [4'h6:4'h5]:        {out1,out2} = {1'b1,5'h05};  // order backwards, will not match
+        [4'h6:4'h5]:      {out1,out2} = {1'b1,5'h05};  // order backwards, will not match
         4'b100?:/*8,9*/   {out1,out2} = {1'b1,5'h08};
-        [4'hc:4'hf]:        {out1,out2} = {1'b1,5'h0C};
+        [4'hc:4'hf]:      {out1,out2} = {1'b1,5'h0C};
       endcase
    end
 

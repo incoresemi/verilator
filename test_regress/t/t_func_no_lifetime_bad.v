@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 // Not legal to put "static" here, so no warning
@@ -21,7 +21,7 @@ task t_dunit_static_ok(input int in_ok = 1);
    $display("%d", ++cnt_ok);
 endtask
 
-module t (/*AUTOARG*/);
+module t;
 
    function int f_implicit_static();
       int cnt = 0;

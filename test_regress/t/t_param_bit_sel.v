@@ -5,8 +5,8 @@
 //
 // Other event drive simulators accept this.
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2013 by Jeremy Bennett.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2013 Jeremy Bennett
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -16,8 +16,8 @@ module t (/*AUTOARG*/
    input clk;
 
    // At this point it is ambiguous whether a is scalar or vector
-   parameter a = 1'b0;
-   wire  b = a[0];
+   parameter A = 1'b0;
+   wire  b = A[0];
    // Note however b[0] is illegal.
 
    always @(posedge clk) begin

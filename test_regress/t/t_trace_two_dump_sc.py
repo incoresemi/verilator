@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # DESCRIPTION: Verilator: Verilog Test driver/expect definition
 #
-# Copyright 2024 by Wilson Snyder. This program is free software; you
-# can redistribute it and/or modify it under the terms of either the GNU
-# Lesser General Public License Version 3 or the Perl Artistic License
-# Version 2.0.
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of either the GNU Lesser General Public License Version 3
+# or the Perl Artistic License Version 2.0.
+# SPDX-FileCopyrightText: 2024 Wilson Snyder
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 import vltest_bootstrap
 
 test.scenarios('simulator')
 test.top_filename = "t_trace_two_a.v"
+test.pli_filename = "t/t_trace_two_sc.cpp"
 
 if not test.have_sc:
     test.skip("No SystemC installed")
@@ -22,11 +23,14 @@ test.compile(make_main=False,
              verilator_flags2=['-sc -trace'])
 
 test.run(logfile=test.obj_dir + "/make_first_ALL.log",
-         cmd=["make", "-C", test.obj_dir, "-f", "Vt_trace_two_b.mk", "Vt_trace_two_b__ALL.cpp"])
+         cmd=[
+             os.environ["MAKE"], "-C", test.obj_dir, "-f", "Vt_trace_two_b.mk",
+             "Vt_trace_two_b__ALL.cpp"
+         ])
 
 test.compile(make_main=False,
              top_filename='t_trace_two_a.v',
-             verilator_flags2=['-sc', '-exe', '-trace', test.t_dir + "/t_trace_two_sc.cpp"],
+             verilator_flags2=['-sc', '-exe', '-trace', test.pli_filename],
              v_flags2=['+define+TEST_DUMP'])
 
 test.execute()

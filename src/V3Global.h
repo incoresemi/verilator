@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -37,7 +37,8 @@
 #include <unordered_set>
 
 class AstNetlist;
-class V3HierBlockPlan;
+class V3HierGraph;
+class V3LibMap;
 class V3ThreadPool;
 
 //======================================================================
@@ -46,8 +47,7 @@ class V3ThreadPool;
 /// Save a given variable's value on the stack, restoring it at end-of-scope.
 // Object must be named, or it will not persist until end-of-scope.
 // Constructor needs () or GCC 4.8 false warning.
-#define VL_RESTORER(var) \
-    const VRestorer<typename std::decay<decltype(var)>::type> restorer_##var(var);
+#define VL_RESTORER(var) const VRestorer<typename std::decay_t<decltype(var)>> restorer_##var(var);
 /// Get the copy of the variable previously saved by VL_RESTORER()
 #define VL_RESTORER_PREV(var) restorer_##var.saved()
 
@@ -98,12 +98,14 @@ constexpr bool operator==(VWidthMinUsage::en lhs, const VWidthMinUsage& rhs) {
 
 class V3Global final {
     // Globals
-    AstNetlist* m_rootp = nullptr;  // Root of entire netlist,
-    // created by makeInitNetlist(} so static constructors run first
-    V3HierBlockPlan* m_hierPlanp = nullptr;  // Hierarchical Verilation plan,
-    // nullptr unless hier_block, set via hierPlanp(V3HierBlockPlan*}
-    V3ThreadPool* m_threadPoolp = nullptr;  // Thread Pool,
-    // nullptr unless 'verilatedJobs' is known, set via threadPoolp(V3ThreadPool*)
+    // Root of entire netlist, created by makeInitNetlist(} so static constructors run first
+    AstNetlist* m_rootp = nullptr;
+    // Hierarchical block graph (plan) iff hierarchical verilation is performed
+    V3HierGraph* m_hierGraphp = nullptr;
+    // Thread Pool, nullptr unless 'verilatedJobs' is known, set via threadPoolp(V3ThreadPool*)
+    V3ThreadPool* m_threadPoolp = nullptr;
+    // Library Mapping, nullptr unless --libmap is used
+    V3LibMap* m_libMapp = nullptr;
     VWidthMinUsage m_widthMinUsage
         = VWidthMinUsage::LINT_WIDTH;  // What AstNode::widthMin() is used for
 
@@ -118,14 +120,17 @@ class V3Global final {
     bool m_hasEvents = false;  // Design uses SystemVerilog named events
     bool m_hasClasses = false;  // Design uses SystemVerilog classes
     bool m_hasSampled = false;  // Design uses SAMPLED expresions
+    bool m_hasTable = false;  // Desgin has the UDP Table.
     bool m_hasVirtIfaces = false;  // Design uses virtual interfaces
     bool m_usesProbDist = false;  // Uses $dist_*
     bool m_usesStdPackage = false;  // Design uses the std package
     bool m_usesTiming = false;  // Design uses timing constructs
     bool m_hasForceableSignals = false;  // Need to apply V3Force pass
-    bool m_hasSCTextSections = false;  // Has `systemc_* sections that need to be emitted
+    bool m_hasSystemCSections = false;  // Has AstSystemCSection that need to be emitted
     bool m_useParallelBuild = false;  // Use parallel build for model
+    bool m_useRandSequence = false;  // Has `randsequence`
     bool m_useRandomizeMethods = false;  // Need to define randomize() class methods
+    uint64_t m_currentHierBlockCost = 0;  // Total cost of this hier block, used for scheduling
 
     // Memory address to short string mapping (for debug)
     std::unordered_map<const void*, std::string>
@@ -146,8 +151,11 @@ public:
     void boot();
     void shutdown();  // Release allocated resources
 
+    void vlExit(int status);
+
     // ACCESSORS (general)
     AstNetlist* rootp() const VL_MT_SAFE { return m_rootp; }
+    V3LibMap* libMapp() const VL_PURE { return m_libMapp; }
     V3ThreadPool* threadPoolp() const VL_PURE { return m_threadPoolp; }
     void threadPoolp(V3ThreadPool* threadPoolp) {
         UASSERT(!m_threadPoolp, "attempted to create multiple threadPool singletons");
@@ -182,6 +190,8 @@ public:
     void setHasClasses() { m_hasClasses = true; }
     bool hasSampled() const { return m_hasSampled; }
     void setHasSampled() { m_hasSampled = true; }
+    bool hasTable() const { return m_hasTable; }
+    void setHasTable() { m_hasTable = true; }
     bool hasVirtIfaces() const { return m_hasVirtIfaces; }
     void setHasVirtIfaces() { m_hasVirtIfaces = true; }
     bool usesProbDist() const { return m_usesProbDist; }
@@ -192,15 +202,14 @@ public:
     void setUsesTiming() { m_usesTiming = true; }
     bool hasForceableSignals() const { return m_hasForceableSignals; }
     void setHasForceableSignals() { m_hasForceableSignals = true; }
-    bool hasSCTextSections() const VL_MT_SAFE { return m_hasSCTextSections; }
-    void setHasSCTextSections() { m_hasSCTextSections = true; }
-    V3HierBlockPlan* hierPlanp() const { return m_hierPlanp; }
-    void hierPlanp(V3HierBlockPlan* plan) {
-        UASSERT(!m_hierPlanp, "call once");
-        m_hierPlanp = plan;
-    }
+    bool hasSystemCSections() const VL_MT_SAFE { return m_hasSystemCSections; }
+    void setHasSystemCSections() { m_hasSystemCSections = true; }
+    V3HierGraph* hierGraphp() const { return m_hierGraphp; }
+    void hierGraphp(V3HierGraph* graphp) { m_hierGraphp = graphp; }
     bool useParallelBuild() const { return m_useParallelBuild; }
     void useParallelBuild(bool flag) { m_useParallelBuild = flag; }
+    bool useRandSequence() const { return m_useRandSequence; }
+    void useRandSequence(bool flag) { m_useRandSequence = flag; }
     bool useRandomizeMethods() const { return m_useRandomizeMethods; }
     void useRandomizeMethods(bool flag) { m_useRandomizeMethods = flag; }
     void saveJsonPtrFieldName(const std::string& fieldName);
@@ -208,6 +217,9 @@ public:
     void idPtrMapDumpJson(std::ostream& os);
     const std::string& ptrToId(const void* p);
     std::thread::id mainThreadId() const { return m_mainThreadId; }
+    static std::vector<std::string> verilatedCppFiles();
+    uint64_t currentHierBlockCost() const { return m_currentHierBlockCost; }
+    void currentHierBlockCost(uint64_t cost) { m_currentHierBlockCost = cost; }
 };
 
 extern V3Global v3Global;

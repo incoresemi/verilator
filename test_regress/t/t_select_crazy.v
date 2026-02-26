@@ -1,8 +1,8 @@
 // DESCRIPTION: Verilator: Dotted reference that uses another dotted reference
 // as the select expression
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 interface foo_intf;
@@ -13,7 +13,7 @@ function integer the_other_func (input integer val);
    return val;
 endfunction
 
-module t (/*AUTOARG*/);
+module t;
    genvar the_genvar;
    generate
       for (the_genvar = 0; the_genvar < 4; the_genvar++) begin: foo_loop

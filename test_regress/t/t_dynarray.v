@@ -1,13 +1,13 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
 `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
 `define checks(gotv,expv) do if ((gotv) != (expv)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
-`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) !== (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
+`define checkp(gotv,expv_s) do begin string gotv_s; gotv_s = $sformatf("%p", gotv); if ((gotv_s) != (expv_s)) begin $write("%%Error: %s:%0d:  got='%s' exp='%s'\n", `__FILE__,`__LINE__, (gotv_s), (expv_s)); `stop; end end while(0);
 
 module t (/*AUTOARG*/
    // Inputs
@@ -57,7 +57,7 @@ module t (/*AUTOARG*/
          `checkh(a[0], 10);
          `checkh(a[1], 11);
          `checkh(a[2], 12);
-         `checkp(a, "'{'ha, 'hb, 'hc} ");
+         `checkp(a, "'{'ha, 'hb, 'hc}");
          a.delete;
          `checkh(a.size, 0);
 
@@ -81,10 +81,8 @@ module t (/*AUTOARG*/
          `checkh(a[0], 5);
          `checkh(a[1], 6);
          a = new[2];
-`ifdef verilator  // bug2618
          a[0] = 0;
          a[1] = 0;
-`endif
          `checkh(a[0], 0);
          `checkh(a[1], 0);
 
@@ -97,10 +95,8 @@ module t (/*AUTOARG*/
          `checkh(b.size, 4);
          `checkh(b[0], 5);
          `checkh(b[1], 6);
-`ifdef verilator  // bug2618
          b[2] = 0;
          b[3] = 0;
-`endif
          `checkh(b[2], 0);
          `checkh(b[3], 0);
 
@@ -115,12 +111,10 @@ module t (/*AUTOARG*/
          `checkh(a.size, 0);
          b = new [4](a);
          `checkh(b.size, 4);
-`ifdef verilator  // bug2618
          b[0] = 0;
          b[1] = 0;
          b[2] = 0;
          b[3] = 0;
-`endif
          `checkh(b[0], 0);
          `checkh(b[1], 0);
          `checkh(b[2], 0);

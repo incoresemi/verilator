@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `ifdef TEST_DISABLE
@@ -12,7 +12,7 @@
  `define PRAGMA
 `endif
 
-module t (/*AUTOARG*/);
+module t;
 
    int i, j;
 
@@ -22,11 +22,11 @@ module t (/*AUTOARG*/);
    end
 
    initial begin
-      // Test a loop smaller than --unroll-count
+      // Test a loop equal to --unroll-count - should unroll without pragma
       `PRAGMA
-      for (i = 0; i < 2; ++i) begin
+      for (i = 0; i < 4; ++i) begin
          `PRAGMA
-         for (j = 0; j < 2; ++j) begin
+         for (j = 0; j < 4; ++j) begin
             $c("small();");
          end
       end

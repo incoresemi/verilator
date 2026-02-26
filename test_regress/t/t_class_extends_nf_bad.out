@@ -2,8 +2,12 @@
                                         : ... Suggested alternative: 'IsFound'
    15 | class Cls extends IsNotFound;   
       |                   ^~~~~~~~~~
+        ... See the manual at https://verilator.org/verilator_doc.html?v=latest for more assistance.
 %Error: t/t_class_extends_nf_bad.v:18:25: Class for 'extends' not found: 'NotFound2'
                                         : ... Suggested alternative: 'otFound2'
    18 | class Cls2 extends Pkg::NotFound2;   
       |                         ^~~~~~~~~
+%Error: t/t_class_extends_nf_bad.v:20:10: 'super' used on non-extended class (IEEE 1800-2023 8.15)
+   20 |     super.new();
+      |          ^
 %Error: Exiting due to

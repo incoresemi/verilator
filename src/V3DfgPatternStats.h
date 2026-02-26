@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -28,7 +28,7 @@ class V3DfgPatternStats final {
     static constexpr uint32_t MAX_PATTERN_DEPTH = 4;
 
     std::map<std::string, std::string> m_internedConsts;  // Interned constants
-    std::map<const AstVar*, std::string> m_internedVars;  // Interned variables
+    std::map<const AstNode*, std::string> m_internedVars;  // Interned variables
     std::map<uint32_t, std::string> m_internedSelLsbs;  // Interned lsb value for selects
     std::map<uint32_t, std::string> m_internedWordWidths;  // Interned widths
     std::map<uint32_t, std::string> m_internedWideWidths;  // Interned widths
@@ -51,7 +51,7 @@ class V3DfgPatternStats final {
     }
 
     const std::string& internVar(const DfgVertexVar& vtx) {
-        const auto pair = m_internedVars.emplace(vtx.varp(), "v");
+        const auto pair = m_internedVars.emplace(vtx.nodep(), "v");
         if (pair.second) pair.first->second += toLetters(m_internedVars.size() - 1);
         return pair.first->second;
     }
@@ -118,9 +118,10 @@ class V3DfgPatternStats final {
             }
 
             // Operands
-            vtx.forEachSource([&](const DfgVertex& src) {
+            vtx.foreachSource([&](const DfgVertex& src) {
                 ss << ' ';
                 if (render(ss, src, depth - 1)) deep = true;
+                return false;
             });
             // S-expression end
             ss << ')';
@@ -131,11 +132,10 @@ class V3DfgPatternStats final {
 
         // Annotate type
         ss << ':';
-        const AstNodeDType* const dtypep = vtx.dtypep();
-        if (!VN_IS(dtypep, BasicDType)) {
-            dtypep->dumpSmall(ss);
+        if (!vtx.dtype().isPacked()) {
+            vtx.dtype().astDtypep()->dumpSmall(ss);
         } else {
-            const uint32_t width = dtypep->width();
+            const uint32_t width = vtx.size();
             if (width == 1) {
                 ss << '1';
             } else if (width <= VL_QUADSIZE) {

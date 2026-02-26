@@ -1,17 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2024 by Andrew Nolte. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
-// SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
+// SPDX-FileCopyrightText: 2024-2025 cocotb contributors
+// SPDX-License-Identifier: BSD-3-Clause
 //
 //*************************************************************************
-
-// Copyright cocotb contributors
-// Licensed under the Revised BSD License, see LICENSE for details.
-// SPDX-License-Identifier: BSD-3-Clause
 
 #include "verilated.h"
 #include "verilated_vpi.h"
@@ -20,6 +13,10 @@
 
 #include <cstdint>
 #include <memory>
+
+extern "C" {
+#include <libgen.h>
+}
 
 #ifndef VM_TRACE_FST
 // emulate new verilator behavior for legacy versions
@@ -129,7 +126,7 @@ int main(int argc, char** argv) {
         VerilatedVpi::callCbs(cbReadOnlySynch);
 
 #if VM_TRACE
-        if (traceOn) { tfp->dump(contextp->time()); }
+        if (traceOn) tfp->dump(contextp->time());
 #endif
         // cocotb controls the clock inputs using cbAfterDelay so
         // skip ahead to the next registered callback
@@ -165,7 +162,7 @@ int main(int argc, char** argv) {
     top->final();
 
 #if VM_TRACE
-    if (traceOn) { tfp->close(); }
+    if (traceOn) tfp->close();
 #endif
 
 // VM_COVERAGE is a define which is set if Verilator is

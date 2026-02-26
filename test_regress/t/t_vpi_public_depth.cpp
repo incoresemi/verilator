@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2010-2023 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2010-2023 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -26,6 +26,8 @@
 #include "Vt_vpi_public_depth__Dpi.h"
 #elif defined(T_VPI_PUBLIC_DEPTH_OFF)
 #include "Vt_vpi_public_depth_off__Dpi.h"
+#elif defined(T_VPI_PUBLIC_OFF)
+#include "Vt_vpi_public_off__Dpi.h"
 #else
 #error "Bad test"
 #endif
@@ -40,38 +42,6 @@
 // These require the above. Comment prevents clang-format moving them
 #include "TestSimulator.h"
 #include "TestVpi.h"
-
-// __FILE__ is too long
-#define FILENM "t_vpi_public_depth.cpp"
-
-#define DEBUG \
-    if (0) printf
-
-#define CHECK_RESULT_NZ(got) \
-    if (!(got)) { \
-        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", FILENM, __LINE__); \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT_Z(got) \
-    if (got) { \
-        printf("%%Error: %s:%d: GOT = !NULL  EXP = NULL\n", FILENM, __LINE__); \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT(got, exp) \
-    if ((got) != (exp)) { \
-        std::cout << std::dec << "%Error: " << FILENM << ":" << __LINE__ << ": GOT = " << (got) \
-                  << "   EXP = " << (exp) << std::endl; \
-        return __LINE__; \
-    }
-
-#define CHECK_RESULT_CSTR(got, exp) \
-    if (std::strcmp((got), (exp))) { \
-        printf("%%Error: %s:%d: GOT = '%s'   EXP = '%s'\n", FILENM, __LINE__, \
-               (got) ? (got) : "<null>", (exp) ? (exp) : "<null>"); \
-        return __LINE__; \
-    }
 
 void modDump(const TestVpiHandle& it, int n) {
     while (TestVpiHandle hndl = vpi_scan(it)) {
@@ -118,6 +88,15 @@ int mon_check() {
     TestVpiHandle topmod_done_should_be_0 = (vpi_scan(it));
     it.freed();  // IEEE 37.2.2 vpi_scan at end does a vpi_release_handle
     CHECK_RESULT_Z(topmod_done_should_be_0);
+
+    TestVpiHandle mod_a = vpi_handle_by_name(const_cast<PLI_BYTE8*>("\\mod.a "), topmod);
+#if defined(T_VPI_PUBLIC_OFF)
+    // metacomment from module A should be ignored
+    CHECK_RESULT_Z(mod_a);
+    return 0;
+#endif
+
+    CHECK_RESULT_NZ(mod_a);
 
     TestVpiHandle it2 = vpi_iterate(vpiModule, topmod);
     CHECK_RESULT_NZ(it2);

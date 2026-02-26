@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # DESCRIPTION: Verilator: Verilog Test driver/expect definition
 #
-# Copyright 2024 by Wilson Snyder. This program is free software; you
-# can redistribute it and/or modify it under the terms of either the GNU
-# Lesser General Public License Version 3 or the Perl Artistic License
-# Version 2.0.
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of either the GNU Lesser General Public License Version 3
+# or the Perl Artistic License Version 2.0.
+# SPDX-FileCopyrightText: 2024 Wilson Snyder
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 import vltest_bootstrap
 
 test.scenarios('vlt')
 test.top_filename = test.obj_dir + "/t_vthread.v"
-test.sanitize = False  # GCC takes too long otherwise
 
 
 def gen(filename, n):
@@ -42,8 +41,8 @@ def gen(filename, n):
 gen(test.top_filename, 6000)
 
 test.compile(
-    # use --trace to generate trace files that can be parallelized
-    verilator_flags2=["--stats --trace --verilate-jobs 2"])
+    # use --trace-vcd to generate trace files that can be parallelized
+    verilator_flags2=["--stats --trace-vcd --verilate-jobs 2"])
 
 test.execute()
 

@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Anthony Donlon.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Anthony Donlon
 // SPDX-License-Identifier: CC0-1.0
 
 // See #4664
@@ -25,7 +25,7 @@ module t;
 endmodule
 
 module sub (
-    intf intf
+    intf intf   // Having this named same "intf intf" important for V3LinkDot coverage
 );
 
     if (intf.A == 10) begin

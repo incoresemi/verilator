@@ -1,14 +1,14 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Kefa Chen.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Kefa Chen
 // SPDX-License-Identifier: CC0-1.0
 
 typedef logic [5:0] udata6_t;
 
-typedef union packed {
-  udata6_t    a;
-  logic [2:0] b;
+typedef union soft packed {
+    udata6_t      a;
+    logic [2 : 0] b;
 } sub_t;
 
 typedef struct packed {

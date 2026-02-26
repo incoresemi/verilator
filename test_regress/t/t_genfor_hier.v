@@ -1,15 +1,15 @@
 // DESCRIPTION: Verilator: Demonstrate deferred linking across module
 // bondaries
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 module m1();
    logic v1;
 endmodule
 
-module t (/*AUTOARG*/);
+module t;
    for (genvar the_genvar = 0; the_genvar < 4; the_genvar++) begin : m1_b
       m1 m1_inst();
    end

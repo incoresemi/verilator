@@ -1,383 +1,408 @@
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:25:4: Unsupported: covergroup
-   25 |    covergroup cg_empty;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:39:4: Ignoring unsupported: covergroup
+   39 |    covergroup cg_empty;
       |    ^~~~~~~~~~
-                    ... For error description see https://verilator.org/warn/UNSUPPORTED?v=latest
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:28:4: Unsupported: covergroup
-   28 |    covergroup cg_opt;
+                   ... For warning description see https://verilator.org/warn/COVERIGN?v=latest
+                   ... Use "/* verilator lint_off COVERIGN */" and lint_on around source to disable this message.
+%Warning-COVERIGN: t/t_covergroup_unsup.v:42:4: Ignoring unsupported: covergroup
+   42 |    covergroup cg_opt;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:29:7: Unsupported: coverage option
-   29 |       type_option.weight = 1;   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:30:7: Unsupported: coverage option
-   30 |       type_option.goal = 99;   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:31:7: Unsupported: coverage option
-   31 |       type_option.comment = "type_option_comment";   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:32:7: Unsupported: coverage option
-   32 |       type_option.strobe = 0;   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:33:7: Unsupported: coverage option
-   33 |       type_option.merge_instances = 1;   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:34:7: Unsupported: coverage option
-   34 |       type_option.distribuge_first = 1;   
-      |       ^~~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:35:7: Unsupported: coverage option
-   35 |       option.name = "the_name";   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:36:7: Unsupported: coverage option
-   36 |       option.weight = 1;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:37:7: Unsupported: coverage option
-   37 |       option.goal = 98;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:38:7: Unsupported: coverage option
-   38 |       option.comment = "option_comment";   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:39:7: Unsupported: coverage option
-   39 |       option.at_least = 20;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:40:7: Unsupported: coverage option
-   40 |       option.auto_bin_max = 10;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:41:7: Unsupported: coverage option
-   41 |       option.cross_num_print_missing = 2;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:42:7: Unsupported: coverage option
-   42 |       option.detect_overlap = 1;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:43:7: Unsupported: coverage option
-   43 |       option.per_instance = 1;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:44:7: Unsupported: coverage option
-   44 |       option.get_inst_coverage = 1;   
-      |       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:47:4: Unsupported: covergroup
-   47 |    covergroup cg_clockingevent() @(posedge clk);
-      |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:47:34: Unsupported: coverage clocking event
-   47 |    covergroup cg_clockingevent() @(posedge clk);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:61:34: Ignoring unsupported: coverage clocking event
+   61 |    covergroup cg_clockingevent() @(posedge clk);
       |                                  ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:49:4: Unsupported: covergroup
-   49 |    covergroup cg_withfunction() with function sample (a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:61:4: Ignoring unsupported: covergroup
+   61 |    covergroup cg_clockingevent() @(posedge clk);
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:49:33: Unsupported: coverage 'with' 'function'
-   49 |    covergroup cg_withfunction() with function sample (a);
-      |                                 ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:51:4: Unsupported: covergroup
-   51 |    covergroup cg_atat() @@ (begin funca or end funcb);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:63:4: Ignoring unsupported: covergroup
+   63 |    covergroup cg_withfunction() with function sample (a);
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:51:25: Unsupported: coverage '@@' events
-   51 |    covergroup cg_atat() @@ (begin funca or end funcb);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:65:25: Ignoring unsupported: coverage '@@' events
+   65 |    covergroup cg_atat() @@ (begin funca or end funcb);
       |                         ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:53:4: Unsupported: covergroup
-   53 |    covergroup cg_bracket;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:65:4: Ignoring unsupported: covergroup
+   65 |    covergroup cg_atat() @@ (begin funca or end funcb);
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:56:4: Unsupported: covergroup
-   56 |    covergroup cg_bracket;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:67:4: Ignoring unsupported: covergroup
+   67 |    covergroup cg_bracket;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:57:9: Unsupported: coverage option
-   57 |       { option.name = "option"; }
-      |         ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:59:4: Unsupported: covergroup
-   59 |    covergroup cg_cp;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:70:4: Ignoring unsupported: covergroup
+   70 |    covergroup cg_bracket2;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:60:7: Unsupported: cover point
-   60 |       coverpoint a;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:74:7: Ignoring unsupported: coverpoint
+   74 |       coverpoint a;
       |       ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:62:4: Unsupported: covergroup
-   62 |    covergroup cg_cp_iff;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:73:4: Ignoring unsupported: covergroup
+   73 |    covergroup cg_cp;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:63:20: Unsupported: cover 'iff'
-   63 |       coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:77:20: Ignoring unsupported: cover 'iff'
+   77 |       coverpoint a iff (b);
       |                    ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:63:7: Unsupported: cover point
-   63 |       coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:77:7: Ignoring unsupported: coverpoint
+   77 |       coverpoint a iff (b);
       |       ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:65:4: Unsupported: covergroup
-   65 |    covergroup cg_id_cp_iff;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:76:4: Ignoring unsupported: covergroup
+   76 |    covergroup cg_cp_iff;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:66:24: Unsupported: cover 'iff'
-   66 |       id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:80:24: Ignoring unsupported: cover 'iff'
+   80 |       id: coverpoint a iff (b);
       |                        ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:66:11: Unsupported: cover point
-   66 |       id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:80:11: Ignoring unsupported: coverpoint
+   80 |       id: coverpoint a iff (b);
       |           ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:68:4: Unsupported: covergroup
-   68 |    covergroup cg_id_cp_id1;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:79:4: Ignoring unsupported: covergroup
+   79 |    covergroup cg_id_cp_iff;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:69:28: Unsupported: cover 'iff'
-   69 |       int id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:83:28: Ignoring unsupported: cover 'iff'
+   83 |       int id: coverpoint a iff (b);
       |                            ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:69:15: Unsupported: cover point
-   69 |       int id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:83:15: Ignoring unsupported: coverpoint
+   83 |       int id: coverpoint a iff (b);
       |               ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:71:4: Unsupported: covergroup
-   71 |    covergroup cg_id_cp_id2;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:82:4: Ignoring unsupported: covergroup
+   82 |    covergroup cg_id_cp_id1;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:72:32: Unsupported: cover 'iff'
-   72 |       var int id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:86:32: Ignoring unsupported: cover 'iff'
+   86 |       var int id: coverpoint a iff (b);
       |                                ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:72:19: Unsupported: cover point
-   72 |       var int id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:86:19: Ignoring unsupported: coverpoint
+   86 |       var int id: coverpoint a iff (b);
       |                   ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:74:4: Unsupported: covergroup
-   74 |    covergroup cg_id_cp_id3;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:85:4: Ignoring unsupported: covergroup
+   85 |    covergroup cg_id_cp_id2;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:75:34: Unsupported: cover 'iff'
-   75 |       var [3:0] id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:89:34: Ignoring unsupported: cover 'iff'
+   89 |       var [3:0] id: coverpoint a iff (b);
       |                                  ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:75:21: Unsupported: cover point
-   75 |       var [3:0] id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:89:21: Ignoring unsupported: coverpoint
+   89 |       var [3:0] id: coverpoint a iff (b);
       |                     ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:77:4: Unsupported: covergroup
-   77 |    covergroup cg_id_cp_id4;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:88:4: Ignoring unsupported: covergroup
+   88 |    covergroup cg_id_cp_id3;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:78:30: Unsupported: cover 'iff'
-   78 |       [3:0] id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:92:30: Ignoring unsupported: cover 'iff'
+   92 |       [3:0] id: coverpoint a iff (b);
       |                              ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:78:17: Unsupported: cover point
-   78 |       [3:0] id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:92:17: Ignoring unsupported: coverpoint
+   92 |       [3:0] id: coverpoint a iff (b);
       |                 ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:80:4: Unsupported: covergroup
-   80 |    covergroup cg_id_cp_id5;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:91:4: Ignoring unsupported: covergroup
+   91 |    covergroup cg_id_cp_id4;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:81:31: Unsupported: cover 'iff'
-   81 |       signed id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:95:31: Ignoring unsupported: cover 'iff'
+   95 |       signed id: coverpoint a iff (b);
       |                               ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:81:18: Unsupported: cover point
-   81 |       signed id: coverpoint a iff (b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:95:18: Ignoring unsupported: coverpoint
+   95 |       signed id: coverpoint a iff (b);
       |                  ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:84:4: Unsupported: covergroup
-   84 |    covergroup cg_cross;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:94:4: Ignoring unsupported: covergroup
+   94 |    covergroup cg_id_cp_id5;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:85:18: Unsupported: cover 'iff'
-   85 |       cross a, b iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:99:18: Ignoring unsupported: cover 'iff'
+   99 |       cross a, b iff (!rst);
       |                  ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:85:7: Unsupported: cross
-   85 |       cross a, b iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:99:7: Ignoring unsupported: cover cross
+   99 |       cross a, b iff (!rst);
       |       ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:87:4: Unsupported: covergroup
-   87 |    covergroup cg_cross2;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:98:4: Ignoring unsupported: covergroup
+   98 |    covergroup cg_cross;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:88:18: Unsupported: cover 'iff'
-   88 |       cross a, b iff (!rst) {}
+%Warning-COVERIGN: t/t_covergroup_unsup.v:102:18: Ignoring unsupported: cover 'iff'
+  102 |       cross a, b iff (!rst) {}
       |                  ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:88:7: Unsupported: cross
-   88 |       cross a, b iff (!rst) {}
+%Warning-COVERIGN: t/t_covergroup_unsup.v:102:7: Ignoring unsupported: cover cross
+  102 |       cross a, b iff (!rst) {}
       |       ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:90:4: Unsupported: covergroup
-   90 |    covergroup cg_cross3;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:101:4: Ignoring unsupported: covergroup
+  101 |    covergroup cg_cross2;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:91:20: Unsupported: coverage option
-   91 |       cross a, b { option.comment = "cross"; option.weight = 12; }
-      |                    ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:91:46: Unsupported: coverage option
-   91 |       cross a, b { option.comment = "cross"; option.weight = 12; }
-      |                                              ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:91:7: Unsupported: cross
-   91 |       cross a, b { option.comment = "cross"; option.weight = 12; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:105:7: Ignoring unsupported: cover cross
+  105 |       cross a, b { option.comment = "cross"; option.weight = 12; }
       |       ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:93:4: Unsupported: covergroup
-   93 |    covergroup cg_cross3;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:104:4: Ignoring unsupported: covergroup
+  104 |    covergroup cg_cross3;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:94:34: Unsupported: coverage cross 'function' declaration
-   94 |       cross a, b { function void crossfunc; endfunction; }
-      |                                  ^~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:94:7: Unsupported: cross
-   94 |       cross a, b { function void crossfunc; endfunction; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:109:24: Ignoring unsupported: coverage cross 'function' declaration
+  109 |          function void crossfunc; endfunction
+      |                        ^~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:110:21: Ignoring unsupported: coverage select function call
+  110 |          bins one = crossfunc();
+      |                     ^~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:110:10: Ignoring unsupported: coverage cross bin
+  110 |          bins one = crossfunc();
+      |          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:108:7: Ignoring unsupported: cover cross
+  108 |       cross a, b {
       |       ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:96:4: Unsupported: covergroup
-   96 |    covergroup cg_cross_id;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:107:4: Ignoring unsupported: covergroup
+  107 |    covergroup cg_cross4;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:97:28: Unsupported: cover 'iff'
-   97 |       my_cg_id: cross a, b iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:114:28: Ignoring unsupported: cover 'iff'
+  114 |       my_cg_id: cross a, b iff (!rst);
       |                            ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:97:17: Unsupported: cross
-   97 |       my_cg_id: cross a, b iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:114:17: Ignoring unsupported: cover cross
+  114 |       my_cg_id: cross a, b iff (!rst);
       |                 ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:100:4: Unsupported: covergroup
-  100 |    covergroup cg_binsoroptions_bk1;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:113:4: Ignoring unsupported: covergroup
+  113 |    covergroup cg_cross_id;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:102:17: Unsupported: cover bin specification
-  102 |       { bins ba = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:119:17: Ignoring unsupported: cover bin specification
+  119 |       { bins ba = {a}; }
       |                 ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:103:24: Unsupported: cover 'iff'
-  103 |       { bins bar = {a} iff (!rst); }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:120:24: Ignoring unsupported: cover 'iff'
+  120 |       { bins bar = {a} iff (!rst); }
       |                        ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:103:18: Unsupported: cover bin specification
-  103 |       { bins bar = {a} iff (!rst); }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:120:18: Ignoring unsupported: cover bin specification
+  120 |       { bins bar = {a} iff (!rst); }
       |                  ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:104:26: Unsupported: cover bin specification
-  104 |       { illegal_bins ila = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:121:26: Ignoring unsupported: cover bin specification
+  121 |       { illegal_bins ila = {a}; }
       |                          ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:105:25: Unsupported: cover bin specification
-  105 |       { ignore_bins iga = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:122:25: Ignoring unsupported: cover bin specification
+  122 |       { ignore_bins iga = {a}; }
       |                         ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:107:19: Unsupported: cover bin specification
-  107 |       { bins ba[] = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:124:19: Ignoring unsupported: cover bin specification
+  124 |       { bins ba[] = {a}; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:108:20: Unsupported: cover bin specification
-  108 |       { bins ba[2] = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:125:20: Ignoring unsupported: cover bin specification
+  125 |       { bins ba[2] = {a}; }
       |                    ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:110:23: Unsupported: cover bin 'with' specification
-  110 |       { bins ba = {a} with { b }; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:127:23: Ignoring unsupported: cover bin 'with' specification
+  127 |       { bins ba = {a} with ( b ); }
       |                       ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:112:27: Unsupported: cover bin 'wildcard' specification
-  112 |       { wildcard bins bwa = {a}; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:129:27: Ignoring unsupported: cover bin 'wildcard' specification
+  129 |       { wildcard bins bwa = {a}; }
       |                           ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:113:34: Unsupported: cover bin 'wildcard' 'with' specification
-  113 |       { wildcard bins bwaw = {a} with { b }; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:130:34: Ignoring unsupported: cover bin 'wildcard' 'with' specification
+  130 |       { wildcard bins bwaw = {a} with ( b ); }
       |                                  ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:115:20: Unsupported: cover bin 'default'
-  115 |       { bins def = default; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:132:20: Ignoring unsupported: cover bin 'default'
+  132 |       { bins def = default; }
       |                    ^~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:116:29: Unsupported: cover bin 'default' 'sequence'
-  116 |       { bins defs = default sequence; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:133:29: Ignoring unsupported: cover bin 'default' 'sequence'
+  133 |       { bins defs = default sequence; }
       |                             ^~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:118:18: Unsupported: cover bin trans list
-  118 |       { bins bts = ( 1, 2 ); }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:135:18: Ignoring unsupported: cover bin trans list
+  135 |       { bins bts = ( 1, 2 ); }
       |                  ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:119:9: Unsupported: cover bin 'wildcard' trans list
-  119 |       { wildcard bins wbts = ( 1, 2 ); }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:136:9: Ignoring unsupported: cover bin 'wildcard' trans list
+  136 |       { wildcard bins wbts = ( 1, 2 ); }
       |         ^~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:120:33: Unsupported: covergroup value range
-  120 |       { bins bts2 = ( 2, 3 ), ( [5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:137:33: Ignoring unsupported: covergroup value range
+  137 |       { bins bts2 = ( 2, 3 ), ( [5:6] ), ( [5 +/- 2] ), ( [ 5 +%- 20.0] ) ; }
       |                                 ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:120:19: Unsupported: cover bin trans list
-  120 |       { bins bts2 = ( 2, 3 ), ( [5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:137:44: Ignoring unsupported: covergroup value range
+  137 |       { bins bts2 = ( 2, 3 ), ( [5:6] ), ( [5 +/- 2] ), ( [ 5 +%- 20.0] ) ; }
+      |                                            ^
+%Warning-COVERIGN: t/t_covergroup_unsup.v:137:59: Ignoring unsupported: covergroup value range
+  137 |       { bins bts2 = ( 2, 3 ), ( [5:6] ), ( [5 +/- 2] ), ( [ 5 +%- 20.0] ) ; }
+      |                                                           ^
+%Warning-COVERIGN: t/t_covergroup_unsup.v:137:19: Ignoring unsupported: cover bin trans list
+  137 |       { bins bts2 = ( 2, 3 ), ( [5:6] ), ( [5 +/- 2] ), ( [ 5 +%- 20.0] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:122:27: Unsupported: cover trans set '=>'
-  122 |       { bins bts2 = ( 1,5 => 6,7 ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:139:27: Ignoring unsupported: cover trans set '=>'
+  139 |       { bins bts2 = ( 1,5 => 6,7 ) ; }
       |                           ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:122:19: Unsupported: cover bin trans list
-  122 |       { bins bts2 = ( 1,5 => 6,7 ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:139:19: Ignoring unsupported: cover bin trans list
+  139 |       { bins bts2 = ( 1,5 => 6,7 ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:123:25: Unsupported: cover '[*'
-  123 |       { bins bts2 = ( 3 [*5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:140:25: Ignoring unsupported: cover '[*'
+  140 |       { bins bts2 = ( 3 [*5] ) ; }
       |                         ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:123:19: Unsupported: cover bin trans list
-  123 |       { bins bts2 = ( 3 [*5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:140:19: Ignoring unsupported: cover bin trans list
+  140 |       { bins bts2 = ( 3 [*5] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:124:25: Unsupported: cover '[*'
-  124 |       { bins bts2 = ( 3 [*5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:141:25: Ignoring unsupported: cover '[*'
+  141 |       { bins bts2 = ( 3 [*5:6] ) ; }
       |                         ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:124:19: Unsupported: cover bin trans list
-  124 |       { bins bts2 = ( 3 [*5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:141:19: Ignoring unsupported: cover bin trans list
+  141 |       { bins bts2 = ( 3 [*5:6] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:125:25: Unsupported: cover '[->'
-  125 |       { bins bts2 = ( 3 [->5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:142:25: Ignoring unsupported: cover '[->'
+  142 |       { bins bts2 = ( 3 [->5] ) ; }
       |                         ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:125:19: Unsupported: cover bin trans list
-  125 |       { bins bts2 = ( 3 [->5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:142:19: Ignoring unsupported: cover bin trans list
+  142 |       { bins bts2 = ( 3 [->5] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:126:25: Unsupported: cover '[->'
-  126 |       { bins bts2 = ( 3 [->5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:143:25: Ignoring unsupported: cover '[->'
+  143 |       { bins bts2 = ( 3 [->5:6] ) ; }
       |                         ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:126:19: Unsupported: cover bin trans list
-  126 |       { bins bts2 = ( 3 [->5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:143:19: Ignoring unsupported: cover bin trans list
+  143 |       { bins bts2 = ( 3 [->5:6] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:127:25: Unsupported: cover '[='
-  127 |       { bins bts2 = ( 3 [=5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:144:25: Ignoring unsupported: cover '[='
+  144 |       { bins bts2 = ( 3 [=5] ) ; }
       |                         ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:127:19: Unsupported: cover bin trans list
-  127 |       { bins bts2 = ( 3 [=5] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:144:19: Ignoring unsupported: cover bin trans list
+  144 |       { bins bts2 = ( 3 [=5] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:128:25: Unsupported: cover '[='
-  128 |       { bins bts2 = ( 3 [=5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:145:25: Ignoring unsupported: cover '[='
+  145 |       { bins bts2 = ( 3 [=5:6] ) ; }
       |                         ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:128:19: Unsupported: cover bin trans list
-  128 |       { bins bts2 = ( 3 [=5:6] ) ; }
+%Warning-COVERIGN: t/t_covergroup_unsup.v:145:19: Ignoring unsupported: cover bin trans list
+  145 |       { bins bts2 = ( 3 [=5:6] ) ; }
       |                   ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:132:4: Unsupported: covergroup
-  132 |    covergroup cg_cross_bins;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:117:4: Ignoring unsupported: covergroup
+  117 |    covergroup cg_binsoroptions_bk1;
       |    ^~~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:134:23: Unsupported: coverage select expression 'binsof'
-  134 |          bins bin_a = binsof(a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:150:26: Ignoring unsupported: cover bin 'with' specification
+  150 |        bins div_by_2 = a with (item % 2 == 0);
+      |                          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:151:34: Ignoring unsupported: cover bin 'with' specification
+  151 |        bins div_by_2_paren[] = a with (item % 2 == 0);
+      |                                  ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:149:6: Ignoring unsupported: coverpoint
+  149 |      coverpoint a {
+      |      ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:148:4: Ignoring unsupported: covergroup
+  148 |    covergroup cg_coverpoint_ref;
+      |    ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:157:23: Ignoring unsupported: coverage select expression 'binsof'
+  157 |          bins bin_a = binsof(a);
       |                       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:134:10: Unsupported: coverage cross bin
-  134 |          bins bin_a = binsof(a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:157:10: Ignoring unsupported: coverage cross bin
+  157 |          bins bin_a = binsof(a);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:135:24: Unsupported: coverage select expression 'binsof'
-  135 |          bins bin_ai = binsof(a) iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:158:24: Ignoring unsupported: coverage select expression 'binsof'
+  158 |          bins bin_ai = binsof(a) iff (!rst);
       |                        ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:135:34: Unsupported: cover 'iff'
-  135 |          bins bin_ai = binsof(a) iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:158:34: Ignoring unsupported: cover 'iff'
+  158 |          bins bin_ai = binsof(a) iff (!rst);
       |                                  ^~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:135:10: Unsupported: coverage cross bin
-  135 |          bins bin_ai = binsof(a) iff (!rst);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:158:10: Ignoring unsupported: coverage cross bin
+  158 |          bins bin_ai = binsof(a) iff (!rst);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:136:23: Unsupported: coverage select expression 'binsof'
-  136 |          bins bin_c = binsof(cp.x);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:159:23: Ignoring unsupported: coverage select expression 'binsof'
+  159 |          bins bin_c = binsof(cp.x);
       |                       ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:136:10: Unsupported: coverage cross bin
-  136 |          bins bin_c = binsof(cp.x);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:159:10: Ignoring unsupported: coverage cross bin
+  159 |          bins bin_c = binsof(cp.x);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:137:24: Unsupported: coverage select expression 'binsof'
-  137 |          bins bin_na = ! binsof(a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:160:24: Ignoring unsupported: coverage select expression 'binsof'
+  160 |          bins bin_na = ! binsof(a);
       |                        ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:137:10: Unsupported: coverage cross bin
-  137 |          bins bin_na = ! binsof(a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:160:10: Ignoring unsupported: coverage cross bin
+  160 |          bins bin_na = ! binsof(a);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:139:33: Unsupported: coverage select expression 'intersect'
-  139 |          bins bin_d = binsof(a) intersect { b };
+%Warning-COVERIGN: t/t_covergroup_unsup.v:162:33: Ignoring unsupported: coverage select expression 'intersect'
+  162 |          bins bin_d = binsof(a) intersect { b };
       |                                 ^~~~~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:139:10: Unsupported: coverage cross bin
-  139 |          bins bin_d = binsof(a) intersect { b };
+%Warning-COVERIGN: t/t_covergroup_unsup.v:162:10: Ignoring unsupported: coverage cross bin
+  162 |          bins bin_d = binsof(a) intersect { b };
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:140:34: Unsupported: coverage select expression 'intersect'
-  140 |          bins bin_nd = ! binsof(a) intersect { b };
+%Warning-COVERIGN: t/t_covergroup_unsup.v:163:34: Ignoring unsupported: coverage select expression 'intersect'
+  163 |          bins bin_nd = ! binsof(a) intersect { b };
       |                                  ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:140:10: Unsupported: coverage cross bin
-  140 |          bins bin_nd = ! binsof(a) intersect { b };
+%Warning-COVERIGN: t/t_covergroup_unsup.v:163:10: Ignoring unsupported: coverage cross bin
+  163 |          bins bin_nd = ! binsof(a) intersect { b };
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:142:23: Unsupported: coverage select expression with
-  142 |          bins bin_e = with (a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:165:23: Ignoring unsupported: coverage select expression with
+  165 |          bins bin_e = with (a);
       |                       ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:142:10: Unsupported: coverage cross bin
-  142 |          bins bin_e = with (a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:165:10: Ignoring unsupported: coverage cross bin
+  165 |          bins bin_e = with (a);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:143:23: Unsupported: coverage select expression with
-  143 |          bins bin_e = ! with (a);
-      |                       ^
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:143:10: Unsupported: coverage cross bin
-  143 |          bins bin_e = ! with (a);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:166:27: Ignoring unsupported: coverage select expression with
+  166 |          bins bin_not_e = ! with (a);
+      |                           ^
+%Warning-COVERIGN: t/t_covergroup_unsup.v:166:10: Ignoring unsupported: coverage cross bin
+  166 |          bins bin_not_e = ! with (a);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:145:26: Unsupported: coverage select expression 'binsof'
-  145 |          bins bin_par = (binsof(a));
+%Warning-COVERIGN: t/t_covergroup_unsup.v:168:26: Ignoring unsupported: coverage select expression 'binsof'
+  168 |          bins bin_par = (binsof(a));
       |                          ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:145:10: Unsupported: coverage cross bin
-  145 |          bins bin_par = (binsof(a));
+%Warning-COVERIGN: t/t_covergroup_unsup.v:168:10: Ignoring unsupported: coverage cross bin
+  168 |          bins bin_par = (binsof(a));
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:146:25: Unsupported: coverage select expression 'binsof'
-  146 |          bins bin_and = binsof(a) && binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:169:25: Ignoring unsupported: coverage select expression 'binsof'
+  169 |          bins bin_and = binsof(a) && binsof(b);
       |                         ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:146:38: Unsupported: coverage select expression 'binsof'
-  146 |          bins bin_and = binsof(a) && binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:169:38: Ignoring unsupported: coverage select expression 'binsof'
+  169 |          bins bin_and = binsof(a) && binsof(b);
       |                                      ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:146:35: Unsupported: coverage select expression '&&'
-  146 |          bins bin_and = binsof(a) && binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:169:35: Ignoring unsupported: coverage select expression '&&'
+  169 |          bins bin_and = binsof(a) && binsof(b);
       |                                   ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:146:10: Unsupported: coverage cross bin
-  146 |          bins bin_and = binsof(a) && binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:169:10: Ignoring unsupported: coverage cross bin
+  169 |          bins bin_and = binsof(a) && binsof(b);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:147:24: Unsupported: coverage select expression 'binsof'
-  147 |          bins bin_or = binsof(a) || binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:170:24: Ignoring unsupported: coverage select expression 'binsof'
+  170 |          bins bin_or = binsof(a) || binsof(b);
       |                        ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:147:37: Unsupported: coverage select expression 'binsof'
-  147 |          bins bin_or = binsof(a) || binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:170:37: Ignoring unsupported: coverage select expression 'binsof'
+  170 |          bins bin_or = binsof(a) || binsof(b);
       |                                     ^~~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:147:34: Unsupported: coverage select expression '||'
-  147 |          bins bin_or = binsof(a) || binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:170:34: Ignoring unsupported: coverage select expression '||'
+  170 |          bins bin_or = binsof(a) || binsof(b);
       |                                  ^~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:147:10: Unsupported: coverage cross bin
-  147 |          bins bin_or = binsof(a) || binsof(b);
+%Warning-COVERIGN: t/t_covergroup_unsup.v:170:10: Ignoring unsupported: coverage cross bin
+  170 |          bins bin_or = binsof(a) || binsof(b);
       |          ^~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:133:7: Unsupported: cross
-  133 |       cross a, b {
+%Warning-COVERIGN: t/t_covergroup_unsup.v:171:26: Ignoring unsupported: coverage select expression 'binsof'
+  171 |          bins bin_with = binsof(a) with (a);
+      |                          ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:171:36: Ignoring unsupported: coverage select expression with
+  171 |          bins bin_with = binsof(a) with (a);
+      |                                    ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:171:10: Ignoring unsupported: coverage cross bin
+  171 |          bins bin_with = binsof(a) with (a);
+      |          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:172:29: Ignoring unsupported: coverage select expression 'binsof'
+  172 |          bins bin_or_with = binsof(a) || binsof(a) with (a);
+      |                             ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:172:42: Ignoring unsupported: coverage select expression 'binsof'
+  172 |          bins bin_or_with = binsof(a) || binsof(a) with (a);
+      |                                          ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:172:52: Ignoring unsupported: coverage select expression with
+  172 |          bins bin_or_with = binsof(a) || binsof(a) with (a);
+      |                                                    ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:172:39: Ignoring unsupported: coverage select expression '||'
+  172 |          bins bin_or_with = binsof(a) || binsof(a) with (a);
+      |                                       ^~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:172:10: Ignoring unsupported: coverage cross bin
+  172 |          bins bin_or_with = binsof(a) || binsof(a) with (a);
+      |          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:173:30: Ignoring unsupported: coverage select expression 'binsof'
+  173 |          bins bin_and_with = binsof(a) && binsof(a) with (a);
+      |                              ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:173:43: Ignoring unsupported: coverage select expression 'binsof'
+  173 |          bins bin_and_with = binsof(a) && binsof(a) with (a);
+      |                                           ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:173:53: Ignoring unsupported: coverage select expression with
+  173 |          bins bin_and_with = binsof(a) && binsof(a) with (a);
+      |                                                     ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:173:40: Ignoring unsupported: coverage select expression '&&'
+  173 |          bins bin_and_with = binsof(a) && binsof(a) with (a);
+      |                                        ^~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:173:10: Ignoring unsupported: coverage cross bin
+  173 |          bins bin_and_with = binsof(a) && binsof(a) with (a);
+      |          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:174:37: Ignoring unsupported: coverage select expression 'binsof'
+  174 |          bins bin_multiple_fields = binsof(p.inner_packet.field);
+      |                                     ^~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:174:10: Ignoring unsupported: coverage cross bin
+  174 |          bins bin_multiple_fields = binsof(p.inner_packet.field);
+      |          ^~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:156:7: Ignoring unsupported: cover cross
+  156 |       cross a, b {
       |       ^~~~~
-%Error-UNSUPPORTED: t/t_covergroup_unsup.v:151:4: Unsupported: covergroup
-  151 |    covergroup cg_more extends cg_empty;
+%Warning-COVERIGN: t/t_covergroup_unsup.v:155:4: Ignoring unsupported: covergroup
+  155 |    covergroup cg_cross_bins;
       |    ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:178:4: Ignoring unsupported: covergroup
+  178 |    covergroup cgArgs(int cg_lim);
+      |    ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:185:23: Ignoring unsupported: coverage clocking event
+  185 |       covergroup cov1 @m_z;
+      |                       ^
+%Warning-COVERIGN: t/t_covergroup_unsup.v:186:10: Ignoring unsupported: coverpoint
+  186 |          coverpoint m_x;
+      |          ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:187:10: Ignoring unsupported: coverpoint
+  187 |          coverpoint m_y;
+      |          ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:185:7: Ignoring unsupported: covergroup
+  185 |       covergroup cov1 @m_z;
+      |       ^~~~~~~~~~
+%Warning-COVERIGN: t/t_covergroup_unsup.v:195:7: Ignoring unsupported: covergroup
+  195 |       covergroup extends cg_empty;
+      |       ^~~~~~~~~~
 %Error: Exiting due to

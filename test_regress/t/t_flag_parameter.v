@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2016 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2016 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 //
 // Special cases of "string parameters" :
@@ -22,6 +22,13 @@
 
 `define stop $stop
 `define check(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d: Wrong parameter value", `__FILE__,`__LINE__); `stop; end while(0);
+
+typedef enum logic [1:0] {
+  enum_val_0 = 2'd0,
+  enum_val_1 = 2'd1,
+  enum_val_2 = 2'd2,
+  enum_val_3 = 2'd3
+} enum_t;
 
 module t;
    parameter string1 = "Original String";
@@ -57,6 +64,16 @@ module t;
    parameter int71 = 1;
    parameter int72 = 1;
 
+   parameter bit bit0to0 = 0;
+   parameter bit bit1to1 = 1;
+   parameter bit bit0to1 = 0;
+   parameter bit bit1to0 = 1;
+
+   parameter enum_t enum11 = enum_val_1;
+   parameter enum_t enum12 = enum_val_1;
+   parameter enum_t enum21 = enum_val_1;
+   parameter enum_t enum22 = enum_val_1;
+
    initial begin
       `check(string1,"New String");
       `check(string2,"New String");
@@ -88,6 +105,14 @@ module t;
       `check(int62,32'hdeadbeef);
       `check(int71,-1000);
       `check(int72,-1000);
+      `check(bit0to0, 1'b0);
+      `check(bit1to1, 1'b1);
+      `check(bit0to1, 1'b1);
+      `check(bit1to0, 1'b0);
+      `check(enum11, enum_val_2);
+      `check(enum12, enum_val_2);
+      `check(enum21, enum_val_3);
+      `check(enum22, enum_val_3);
 
       // Check parameter assigned simple integer literal is signed
       if ((int11 << 27) >>> 31 != -1) $stop;

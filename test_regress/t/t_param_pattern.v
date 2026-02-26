@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2021 by Krzysztof Bieganski.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2021 Krzysztof Bieganski
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -14,9 +14,9 @@ package config_pkg;
       int USE_QUAD0;
       int USE_QUAD1;
       int USE_QUAD2;
-   } config_struct;
+   } config_struct_t;
 
-endpackage : config_pkg
+endpackage
 
 module t;
     import config_pkg::*;
@@ -28,11 +28,11 @@ module t;
                                        USE_QUAD1: 5,
                                        USE_QUAD2: 6
                                     })) a_submodule_I ();
-endmodule : t
+endmodule
 
 module struct_submodule
   import config_pkg::*;
-   #(parameter config_struct MY_CONFIG = '0);
+   #(parameter config_struct_t MY_CONFIG = '0);
 
    initial begin
       `checkd(MY_CONFIG.UPPER0, 10);
@@ -43,4 +43,4 @@ module struct_submodule
       $write("*-* All Finished *-*\n");
       $finish;
    end
-endmodule : struct_submodule
+endmodule

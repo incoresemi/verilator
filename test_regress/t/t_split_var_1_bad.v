@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2020 by Yutetsu TAKATSUKASA.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Yutetsu TAKATSUKASA
 // SPDX-License-Identifier: CC0-1.0
 
 logic [7:0] should_show_warning_global0 /* verilator split_var */;
@@ -62,7 +62,7 @@ module sub1(input [3:0]addr, output logic [7:0] rd_data);
    genvar cannot_split_genvar /*verilator split_var*/;
    logic [15:0] [8:0] cannot_split  /*verilator split_var*/;
    always_comb begin
-      logic [8:0] rd_tmp /*verilator split_var*/ = cannot_split[addr];
+      static logic [8:0] rd_tmp /*verilator split_var*/ = cannot_split[addr];
       rd_data = rd_tmp[{3'b0, addr[0]}+:8];
    end
 

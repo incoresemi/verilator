@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2014 by Jie Xu.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Jie Xu
 // SPDX-License-Identifier: CC0-1.0
 
 //bug692
@@ -13,7 +13,7 @@ module t (/*AUTOARG*/
    input  wire       clk;
 
    wire [31:0]       result;
-   test_if  #(.id(3)) s();
+   test_if  #(.ID(3)) s();
    sub_test U_SUB_TEST(s.a.b, result);  // the line causing error
 endmodule : t
 
@@ -30,7 +30,7 @@ endmodule
 // ---------------------------------------------------------------------------
 
 interface test_if
-  #(parameter id = 0)
+  #(parameter ID = 0)
    ();
 
    typedef struct     packed {

@@ -1,8 +1,8 @@
 // DESCRIPTION: Verilator: Test for warning (not error) on improperly width'ed
 // default function argument
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2015 by Todd Strader.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2015 Todd Strader
 // SPDX-License-Identifier: CC0-1.0
 
 function automatic logic foo
@@ -14,7 +14,7 @@ function automatic logic foo
    return x;
 endfunction
 
-module t (/*AUTOARG*/);
+module t;
    logic foo_val;
 
    initial begin

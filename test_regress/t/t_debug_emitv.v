@@ -1,12 +1,18 @@
 // DESCRIPTION: Verilator: Dotted reference that uses another dotted reference
 // as the select expression
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 package Pkg;
    localparam PKG_PARAM = 1;
+
+   typedef enum int {
+      FOO = 0,
+      BAR,
+      BAZ
+   } enum_t;
 endpackage
 package PkgImp;
    import Pkg::*;
@@ -16,10 +22,13 @@ endpackage
 class Cls;
    int member = 1;
    function void method;
+      if (this != this) $stop;
    endfunction
 endclass
 
-interface Iface;
+interface Iface (
+    input clk
+);
    logic ifsig;
    modport mp(input ifsig);
 endinterface
@@ -33,7 +42,7 @@ module t (/*AUTOARG*/
 
    // verilator lint_off UNPACKED
 
-   typedef enum {
+   typedef enum [2:0] {
                  ZERO,
                  ONE = 1
    } e_t;
@@ -52,19 +61,60 @@ module t (/*AUTOARG*/
    us_t us;
    union_t unu;
 
-   int            array[3];
+   integer i1;
+   int array[3];
    initial array = '{1,2,3};
+   logic [63:32] downto_32 = '0;
 
-   reg [15:0]     pubflat /*verilator public_flat_rw @(posedge clk) */;
+   function automatic int ident(int value);
+       return value;
+   endfunction
 
-   reg [15:0]    pubflat_r;
-   wire [15:0]    pubflat_w = pubflat;
-   int            fd;
-   int            i;
+   Iface the_ifaces [3:0] (.*);
 
-   int            q[$];
-   int            assoc[string];
-   int            dyn[];
+   initial begin
+      if ($test$plusargs("HELLO")) $display("Hello argument found.");
+      if (Pkg::FOO == 0) $write("");
+      if (ZERO == 0) $write("");
+      if ($value$plusargs("TEST=%d", i1))
+         $display("value was %d", i1);
+      else
+         $display("+TEST= not found");
+      if (downto_32[33]) $write("");
+      if (downto_32[ident(33)]) $write("");
+      if (|downto_32[48:40]) $write("");
+      if (|downto_32[55+:3]) $write("");
+      if (|downto_32[60-:7]) $write("");
+      if (the_ifaces[2].ifsig) $write("");
+      #1 $write("After #1 delay");
+   end
+
+   bit [6:5][4:3][2:1] arraymanyd[10:11][12:13][14:15];
+
+   reg [15:0] pubflat /*verilator public_flat_rw @(posedge clk) */;
+
+   reg [15:0] pubflat_r;
+   wire [15:0] pubflat_w = pubflat;
+   int fd;
+   int i;
+
+   int q[$];
+   int qb[$ : 3];
+   int assoc[string];
+   int assocassoc[string][real];
+   int dyn[];
+
+   typedef struct packed {
+      logic nn1;
+   } nested_named_t;
+   typedef struct packed {
+      struct packed {
+         logic nn2;
+      } nested_anonymous;
+      nested_named_t nested_named;
+      logic [11:10] nn3;
+   } nibble_t;
+   nibble_t [5:4] nibblearray[3:2];
 
    task t;
       $display("stmt");
@@ -74,7 +124,7 @@ module t (/*AUTOARG*/
       return v == 0 ? 99 : ~v + 1;
    endfunction
 
-   sub sub();
+   sub sub(.*);
 
    initial begin
       int other;
@@ -109,6 +159,8 @@ module t (/*AUTOARG*/
    int sum;
    real r;
    string str;
+   int mod_val;
+   int mod_res;
    always_ff @ (posedge clk) begin
       cyc <= cyc + 1;
       r <= r + 0.01;
@@ -166,6 +218,7 @@ module t (/*AUTOARG*/
 
       str = $sformatf("cyc=%d", cyc);
       $display("str = %s", str);
+      $display("struct = %p", ps);
       $display("%% [%t] [%t] to=%o td=%d", $time, $realtime, $time, $time);
       $sscanf("foo=5", "foo=%d", i);
       $printtimescale;
@@ -178,6 +231,8 @@ module t (/*AUTOARG*/
 
       if (Pkg::PKG_PARAM != 1) $stop;
       sub.r = 62.0;
+
+      mod_res = mod_val % 5;
 
       $display("%g", $log10(r));
       $display("%g", $ln(r));
@@ -198,13 +253,94 @@ module t (/*AUTOARG*/
       $display("%g", $acosh(r));
       $display("%g", $atanh(r));
 
+      if ($sampled(cyc[1])) $write("");
+      if ($rose(cyc)) $write("");
+      if ($fell(cyc)) $write("");
+      if ($stable(cyc)) $write("");
+      if ($changed(cyc)) $write("");
+      if ($past(cyc[1])) $write("");
+
+      if ($rose(cyc, clk)) $write("");
+      if ($fell(cyc, clk)) $write("");
+      if ($stable(cyc, clk)) $write("");
+      if ($changed(cyc, clk)) $write("");
+      if ($past(cyc[1], 5)) $write("");
+
       force sum = 10;
       repeat (2) if (sum != 10) $stop;
       release sum;
    end
+
+   property p;
+      @(posedge clk) ##1 sum[0]
+   endproperty
+   property p1;
+      @(clk) sum[0]
+   endproperty
+
+   assert property (@(clk) not ##1 in);
+
+   initial begin
+      assert_simple_immediate_else: assert(0) else $display("fail");
+      assert_simple_immediate_stmt: assert(0) $display("pass");
+      assert_simple_immediate_stmt_else: assert(0) $display("pass"); else $display("fail");
+
+      assume_simple_immediate: assume(0);
+      assume_simple_immediate_else: assume(0) else $display("fail");
+      assume_simple_immediate_stmt: assume(0) $display("pass");
+      assume_simple_immediate_stmt_else: assume(0) $display("pass"); else $display("fail");
+   end
+
+   assert_observed_deferred_immediate: assert #0 (0);
+   assert_observed_deferred_immediate_else: assert #0 (0) else $display("fail");
+   assert_observed_deferred_immediate_stmt: assert #0 (0) $display("pass");
+   assert_observed_deferred_immediate_stmt_else: assert #0 (0) $display("pass"); else $display("fail");
+
+   assume_observed_deferred_immediate: assume #0 (0);
+   assume_observed_deferred_immediate_else: assume #0 (0) else $display("fail");
+   assume_observed_deferred_immediate_stmt: assume #0 (0) $display("pass");
+   assume_observed_deferred_immediate_stmt_else: assume #0 (0) $display("pass"); else $display("fail");
+
+   assert_final_deferred_immediate: assert final (0);
+   assert_final_deferred_immediate_else: assert final (0) else $display("fail");
+   assert_final_deferred_immediate_stmt: assert final (0) $display("pass");
+   assert_final_deferred_immediate_stmt_else: assert final (0) $display("pass"); else $display("fail");
+
+   assume_final_deferred_immediate: assume final (0);
+   assume_final_deferred_immediate_else: assume final (0) else $display("fail");
+   assume_final_deferred_immediate_stmt: assume final (0) $display("pass");
+   assume_final_deferred_immediate_stmt_else: assume final (0) $display("pass"); else $display("fail");
+
+   property prop();
+      @(posedge clk) 0
+   endproperty
+
+   assert_concurrent: assert property (prop);
+   assert_concurrent_else: assert property(prop) else $display("fail");
+   assert_concurrent_stmt: assert property(prop) $display("pass");
+   assert_concurrent_stmt_else: assert property(prop) $display("pass"); else $display("fail");
+
+   assume_concurrent: assume property(prop);
+   assume_concurrent_else: assume property(prop) else $display("fail");
+   assume_concurrent_stmt: assume property(prop) $display("pass");
+   assume_concurrent_stmt_else: assume property(prop) $display("pass"); else $display("fail");
+
+   cover_concurrent: cover property(prop);
+   cover_concurrent_stmt: cover property(prop) $display("pass");
+
+
+   int a;
+   int ao;
+
+   // verilator lint_off CASTCONST
+   initial begin : assert_intrinsic
+      $cast(ao, a);
+   end
+
+   restrict property (@(posedge clk) ##1 a[0]);
 endmodule
 
-module sub();
+module sub(input logic clk);
    task inc(input int i, output int o);
       o = {1'b0, i[31:1]} + 32'd1;
    endtask

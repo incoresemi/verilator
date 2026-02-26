@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -9,14 +9,16 @@
 
 module t;
    // verilator lint_off UNOPTFLAT
+   // verilator lint_off PROCASSINIT
    logic clk = 0;
    // verilator lint_on UNOPTFLAT
+   // verilator lint_on PROCASSINIT
    always #2 clk = ~clk;
 
    // verilator lint_off UNDRIVEN
    wire[3:0] x;
    // verilator lint_on UNDRIVEN
-   reg[3:0] cyc = 0;
+   bit [3:0] cyc;
    wire[3:0] #3 val1;
    wire[3:0] #3 val2;
    wire[3:0] #5 val3 = cyc;

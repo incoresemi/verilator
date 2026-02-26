@@ -1,9 +1,9 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Copyright 2009 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2009 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 `ifdef VCS
@@ -16,7 +16,7 @@
  `define NO_SHORTREAL
 `endif
 
-module t (/*AUTOARG*/);
+module t;
 
    // Note these are NOT pure.
    import "DPI-C" function void dpii_clear();
@@ -28,7 +28,7 @@ module t (/*AUTOARG*/);
    integer i;
    integer j;
    bit     b;
-   integer errors;
+   int errors;
 
    task check1(integer line, bit got, bit ex);
       if (got != ex) begin

@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -54,9 +54,14 @@ VL_DEFINE_DEBUG_FUNCTIONS;
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef HAVE_TCMALLOC
+#include <gperftools/malloc_extension.h>
+#endif
+
 // clang-format off
 #if defined(_WIN32) || defined(__MINGW32__)
 # include <windows.h>   // LONG for bcrypt.h on MINGW
+# include <algorithm>  // replace
 # include <bcrypt.h>  // BCryptGenRandom
 # include <chrono>
 # include <direct.h>  // mkdir
@@ -91,9 +96,9 @@ string V3Os::getenvStr(const string& envvar, const string& defaultValue) {
 
 void V3Os::setenvStr(const string& envvar, const string& value, const string& why) {
     if (why != "") {
-        UINFO(1, "export " << envvar << "=" << value << " # " << why << endl);
+        UINFO(1, "export " << envvar << "='" << value << "'  # " << why);
     } else {
-        UINFO(1, "export " << envvar << "=" << value << endl);
+        UINFO(1, "export " << envvar << "='" << value << "'");
     }
 #if defined(_WIN32) || defined(__MINGW32__)
     _putenv_s(envvar.c_str(), value.c_str());
@@ -262,8 +267,8 @@ string V3Os::filenameRelativePath(const string& filename, const string& base) VL
     auto aIt = a.begin();
     auto bIt = b.begin();
     while (aIt != a.end() && bIt != b.end()) {
-        // UINFO(9, "fnrp scan " << (aIt - a.begin()) << " " << a.substr(aIt - a.begin()) << endl);
-        // UINFO(9, "fnrp scan " << (bIt - b.begin()) << " " << b.substr(bIt - b.begin()) << endl);
+        // UINFO(9, "fnrp scan " << (aIt - a.begin()) << " " << a.substr(aIt - a.begin()));
+        // UINFO(9, "fnrp scan " << (bIt - b.begin()) << " " << b.substr(bIt - b.begin()));
         auto aWordIt = aIt;  // position of next slash
         for (; aWordIt != a.end(); ++aWordIt) {
             if (isSlash(*aWordIt)) break;
@@ -307,6 +312,16 @@ bool V3Os::filenameIsRel(const string& filename) VL_PURE {
     return std::filesystem::path(filename).is_relative();
 #else
     return (filename.length() > 0 && filename[0] != '/');
+#endif
+}
+
+string V3Os::filenameSlashPath(const string& path) VL_PURE {
+#if defined(_WIN32) || defined(__MINGW32__)
+    string slashedPath = path;
+    std::replace(slashedPath.begin(), slashedPath.end(), '\\', '/');
+    return slashedPath;
+#else
+    return path;
 #endif
 }
 
@@ -359,7 +374,7 @@ void V3Os::filesystemFlushBuildDir(const string& dirname) {
     // Linux kernel may not reread from NFS unless timestamp modified
     const int err = utimes(dirname.c_str(), nullptr);
     // Not an error
-    if (err != 0) UINFO(1, "-Info: File not utimed: " << dirname << endl);
+    if (err != 0) UINFO(1, "-Info: File not utimed: " << dirname);
 #endif
     filesystemFlush(dirname);
 }
@@ -388,6 +403,15 @@ void V3Os::unlinkRegexp(const string& dir, const string& regexp) {
         }
         closedir(dirp);
     }
+#endif
+}
+
+//######################################################################
+// METHODS (memory)
+
+void V3Os::releaseMemory() {
+#ifdef HAVE_TCMALLOC
+    MallocExtension::instance()->ReleaseFreeMemory();
 #endif
 }
 
@@ -461,16 +485,16 @@ void V3Os::u_sleep(int64_t usec) {
 // METHODS (sub command)
 
 int V3Os::system(const string& command) {
-    UINFO(1, "Running system: " << command << endl);
+    UINFO(1, "Running system: " << command);
     const int ret = ::system(command.c_str());
     if (VL_UNCOVERABLE(ret == -1)) {
         v3fatal("Failed to execute command:"  // LCOV_EXCL_LINE
-                << command << " " << std::strerror(errno));
+                << command << " " << std::strerror(errno));  // LCOV_EXCL_LINE
         return -1;  // LCOV_EXCL_LINE
     } else {
         UASSERT(WIFEXITED(ret), "system(" << command << ") returned unexpected value of " << ret);
         const int exit_code = WEXITSTATUS(ret);
-        UINFO(1, command << " returned exit code of " << exit_code << std::endl);
+        UINFO(1, command << " returned exit code of " << exit_code);
         UASSERT(exit_code >= 0, "exit code must not be negative");
         return exit_code;
     }

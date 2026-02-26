@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2014 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // bug749
@@ -33,7 +33,7 @@ module t (/*AUTOARG*/
    end
 endmodule
 
-module sub1 (/*AUTOARG*/);
+module sub1;
    parameter [31:0] IN = 99;
    parameter FLAVOR = 1;
 `ifdef TEST_VERBOSE
@@ -41,7 +41,7 @@ module sub1 (/*AUTOARG*/);
 `endif
 endmodule
 
-module sub2 (/*AUTOARG*/);
+module sub2;
    parameter [31:0] IN = 99;
    parameter FLAVOR = 2;
 `ifdef TEST_VERBOSE

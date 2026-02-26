@@ -1,9 +1,9 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Copyright 2023 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 `ifdef USE_VPI_NOT_DPI
@@ -47,13 +47,14 @@ extern "C" int mon_check();
    reg LONGSTART_a_very_long_name_which_will_get_hashed_a_very_long_name_which_will_get_hashed_a_very_long_name_which_will_get_hashed_a_very_long_name_which_will_get_hashed_LONGEND;
    // verilator lint_off ASCRANGE
    reg [0:61]   quads[2:3]      /*verilator public_flat_rw @(posedge clk)*/;
+   reg [8:19]   rev   /*verilator public_flat_rw @(posedge clk) */;
 /*verilator public_off*/
    reg             invisible1;
    // verilator lint_on ASCRANGE
 
-/*verilator public_flat_rd_on*/
+/*verilator public_flat_on*/
    reg [31:0]      count;
-   reg [31:0]      half_count;
+   reg [31:0]      half_count = 0;
 /*verilator public_off*/
 /*verilator public_flat_rw_on*/
    reg [31:0]      delayed;
@@ -72,8 +73,15 @@ extern "C" int mon_check();
    integer        status;
 
 /*verilator public_flat_rw_on*/
+   integer        integer1;
+   byte           byte1;
+   shortint       short1;
+   int            int1;
+   longint        long1;
    real           real1;
    string         str1;
+   localparam int nullptr = 123;
+   logic [31:0] some_mem [4] = {0, 0, 0, 432};
 /*verilator public_off*/
 
    sub sub();
@@ -91,8 +99,15 @@ extern "C" int mon_check();
       text = "Verilog Test module";
       too_big = "some text";
 
+      integer1 = 123;
+      byte1 = 123;
+      short1 = 123;
+      int1 = 123;
+      long1 = 123;
       real1 = 1.0;
       str1 = "hello";
+
+      rev = 12'habc;
 
 `ifdef VERILATOR
       status = $c32("mon_check()");

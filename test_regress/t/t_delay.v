@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2003 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2003 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `timescale 100ns/1ns
@@ -12,7 +12,7 @@ module t (/*AUTOARG*/
    );
 
    input clk;
-   integer cyc=1;
+   int cyc;
 
    reg [31:0] dly0;
    wire [31:0] dly1;

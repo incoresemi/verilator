@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2005 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2005 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (clk);
@@ -15,9 +15,7 @@ module t (clk);
    wire [2:0] q3;
    wire [7:0] q8;
 
-   // verilator lint_off UNOPTFLAT
    reg        ena;
-   // verilator lint_on  UNOPTFLAT
 
    condff #(12) condff
      (.clk(clk), .sen(1'b0), .ena(ena),

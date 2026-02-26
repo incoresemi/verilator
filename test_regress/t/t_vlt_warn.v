@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2010 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2010 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // Try inline config
@@ -14,11 +14,14 @@
 
 
 
-
 module t;
    reg width_warn_var_line18 = 2'b11;  // Width warning - must be line 18
    reg width_warn2_var_line19 = 2'b11;  // Width warning - must be line 19
    reg width_warn3_var_line20 = 2'b11;  // Width warning - must be line 20
+
+   // Must not turn back on warning disabled via control file
+   // verilator lint_on CASEINCOMPLETE
+   // verilator lint_on CASEX
 
    initial begin
       casex (1'b1)

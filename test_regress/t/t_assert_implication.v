@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2019 by Peter Monsson.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Peter Monsson
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -111,13 +111,13 @@ module Test
 
    // Test correct handling of disable iff
    assert property (
-     @(posedge clk) disable iff (cyc < 3)
+     @(posedge clk) disable iff ($sampled(cyc) < 3)
      1 |=> cyc > 3
    );
 
    // Test correct handling of disable iff in current cycle
    assert property (
-     @(posedge clk) disable iff (cyc == 4)
+     @(posedge clk) disable iff ($sampled(cyc) == 4)
      (cyc == 4) |=> 0
    );
 

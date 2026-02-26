@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 typedef class Cls;
@@ -13,7 +13,7 @@ class Cls;
    function void setv_methoda(input int val); imembera = val; endfunction
 endclass : Cls
 
-module t (/*AUTOARG*/);
+module t;
    initial begin
      int tmp_i;
       Cls c;

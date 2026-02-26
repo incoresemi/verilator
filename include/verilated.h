@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -39,8 +39,8 @@
 #endif
 
 // clang-format off
-#include "verilatedos.h"
 #include "verilated_config.h"
+#include "verilatedos.h"
 #if VM_SC
 # include "verilated_sc.h"  // Get SYSTEMC_VERSION and time declarations
 #endif
@@ -113,6 +113,7 @@ class VerilatedVcdSc;
 //=========================================================================
 // Basic types
 
+// Type letters
 // clang-format off
 //    P                     // Packed data of bit type (C/S/I/Q/W)
 using CData = uint8_t;    ///< Data representing 'bit' of 1-8 packed bits
@@ -124,6 +125,8 @@ using WData = EData;        ///< Data representing >64 packed bits (used as poin
 //    F     = float;        // No typedef needed; Verilator uses float
 //    D     = double;       // No typedef needed; Verilator uses double
 //    N     = std::string;  // No typedef needed; Verilator uses string
+//    U     = VlUnpacked;
+//    R     = VlQueue;
 // clang-format on
 
 using WDataInP = const WData*;  ///< 'bit' of >64 packed bits as array input to a function
@@ -151,7 +154,10 @@ enum VerilatedVarFlags {
     // Flags
     VLVF_PUB_RD = (1 << 8),  // Public readable
     VLVF_PUB_RW = (1 << 9),  // Public writable
-    VLVF_DPI_CLAY = (1 << 10)  // DPI compatible C standard layout
+    VLVF_DPI_CLAY = (1 << 10),  // DPI compatible C standard layout
+    VLVF_CONTINUOUSLY = (1 << 11),  // Is continously assigned
+    VLVF_FORCEABLE = (1 << 12),  // Forceable
+    VLVF_SIGNED = (1 << 13)  // Signed integer
 };
 
 // IEEE 1800-2023 Table 20-6
@@ -175,14 +181,13 @@ enum class VerilatedAssertDirectiveType : uint8_t {
 using VerilatedAssertType_t = std::underlying_type<VerilatedAssertType>::type;
 using VerilatedAssertDirectiveType_t = std::underlying_type<VerilatedAssertDirectiveType>::type;
 
-//=============================================================================
-// Utility functions
+// Type trait: whether T is a user-defined custom struct
+template <typename>
+struct VlIsCustomStruct : public std::false_type {};
 
-template <size_t N>
-inline constexpr size_t roundUpToMultipleOf(size_t value) {
-    static_assert((N & (N - 1)) == 0, "'N' must be a power of 2");
-    return (value + N - 1) & ~(N - 1);
-}
+// Type trait: used to detect if array element is a custom struct (e.g. for struct arrays)
+template <typename T>
+struct VlContainsCustomStruct : VlIsCustomStruct<T> {};
 
 //=========================================================================
 // Mutex and threading support
@@ -307,20 +312,6 @@ private:
 };
 
 //=========================================================================
-/// Base class for all Verilated module classes.
-
-class VerilatedModule VL_NOT_FINAL {
-    VL_UNCOPYABLE(VerilatedModule);
-
-private:
-    const char* m_namep;  // Module name
-public:
-    explicit VerilatedModule(const char* namep);  // Create module with given hierarchy name
-    ~VerilatedModule();
-    const char* name() const VL_MT_SAFE_POSTINIT { return m_namep; }  ///< Return name of module
-};
-
-//=========================================================================
 // Functions overridable by user defines
 // (Internals however must use VL_PRINTF_MT, which calls these.)
 
@@ -423,6 +414,7 @@ protected:
         std::string m_profExecFilename;  // +prof+exec+file filename
         std::string m_profVltFilename;  // +prof+vlt filename
         std::string m_solverProgram;  // SMT solver program
+        bool m_warnUnsatConstr = true;  // Warn on unsatisfied constraints
         VlOs::DeltaCpuTime m_cpuTimeStart{false};  // CPU time, starts when create first model
         VlOs::DeltaWallTime m_wallTimeStart{false};  // Wall time, starts when create first model
         std::vector<traceBaseModelCb_t> m_traceBaseModelCbs;  // Callbacks to traceRegisterModel
@@ -440,7 +432,9 @@ protected:
     // Implementation details
     const std::unique_ptr<VerilatedContextImpData> m_impdatap;
     // Number of threads to use for simulation (size of m_threadPool + 1 for main thread)
-    unsigned m_threads = std::thread::hardware_concurrency();
+    unsigned m_threads = VlOs::getProcessDefaultParallelism();
+    // Use numa automatic CPU-to-thread assignment
+    bool m_useNumaAssign = false;
     // Number of threads in added models
     unsigned m_threadsInModels = 0;
     // The thread pool shared by all models added to this context
@@ -607,6 +601,13 @@ public:
     /// Can only be called before the thread pool is created (before first model is added).
     void threads(unsigned n);
 
+    /// Use numa automatic CPU-to-thread assignment.
+    bool useNumaAssign() const VL_MT_SAFE { return m_useNumaAssign; }
+    /// Set numa assignment of threads to cores
+    /// Defaults false; set true automatically when threads() called;
+    /// call this to override back to false if numa assignment not wanted.
+    void useNumaAssign(bool flag);
+
     /// Trace signals in models within the context; called by application code
     void trace(VerilatedTraceBaseC* tfp, int levels, int options = 0);
     /// Allow traces to at some point be enabled (disables some optimizations)
@@ -633,7 +634,7 @@ public:
     }
 
     // Internal: Model and thread setup
-    void addModel(VerilatedModel*);
+    void addModel(const VerilatedModel* modelp);
     VerilatedVirtualBase* threadPoolp();
     void prepareClone();
     VerilatedVirtualBase* threadPoolpOnClone();
@@ -662,6 +663,9 @@ public:
     // Internal: SMT solver program
     std::string solverProgram() const VL_MT_SAFE;
     void solverProgram(const std::string& flag) VL_MT_SAFE;
+    // Internal: Control display of unsatisfied constraints
+    bool warnUnsatConstr() const VL_MT_SAFE { return m_ns.m_warnUnsatConstr; }
+    void warnUnsatConstr(bool flag) VL_MT_SAFE { m_ns.m_warnUnsatConstr = flag; }
 
     // Internal: Find scope
     const VerilatedScope* scopeFind(const char* namep) const VL_MT_SAFE;
@@ -692,6 +696,8 @@ public:  // But for internal use only
     explicit VerilatedSyms(VerilatedContext* contextp);  // Pass null for default context
     ~VerilatedSyms();
     VL_UNCOPYABLE(VerilatedSyms);
+
+    virtual const char* name() const = 0;
 };
 
 //===========================================================================
@@ -707,26 +713,25 @@ public:
     };  // Type of a scope, currently only module and package are interesting
 private:
     // Fastpath:
-    VerilatedSyms* m_symsp = nullptr;  // Symbol table
+    VerilatedSyms* const m_symsp;  // Symbol table
     void** m_callbacksp = nullptr;  // Callback table pointer (Fastpath)
     int m_funcnumMax = 0;  // Maximum function number stored (Fastpath)
     // 4 bytes padding (on -m64), for rent.
     VerilatedVarNameMap* m_varsp = nullptr;  // Variable map
-    const char* m_namep = nullptr;  // Scope name (Slowpath)
-    const char* m_identifierp = nullptr;  // Identifier of scope (with escapes removed)
-    const char* m_defnamep = nullptr;  // Definition name (SCOPE_MODULE only)
-    int8_t m_timeunit = 0;  // Timeunit in negative power-of-10
-    Type m_type = SCOPE_OTHER;  // Type of the scope
+    const char* const m_namep;  // Scope name (Slowpath)
+    const char* const m_identifierp;  // Identifier of scope (with escapes removed)
+    const char* const m_defnamep;  // Definition name (SCOPE_MODULE only)
+    const int8_t m_timeunit;  // Timeunit in negative power-of-10
+    const Type m_type;  // Type of the scope
 
-public:  // But internals only - called from VerilatedModule's
-    VerilatedScope() = default;
+public:  // But internals only - called from verilated modules, VerilatedSyms
+    VerilatedScope(VerilatedSyms* symsp, const char* suffixp, const char* identifier,
+                   const char* defnamep, int8_t timeunit, Type type);
     ~VerilatedScope();
-    void configure(VerilatedSyms* symsp, const char* prefixp, const char* suffixp,
-                   const char* identifier, const char* defnamep, int8_t timeunit,
-                   const Type& type) VL_MT_UNSAFE;
+
     void exportInsert(int finalize, const char* namep, void* cb) VL_MT_UNSAFE;
-    void varInsert(int finalize, const char* namep, void* datap, bool isParam,
-                   VerilatedVarType vltype, int vlflags, int dims, ...) VL_MT_UNSAFE;
+    void varInsert(const char* namep, void* datap, bool isParam, VerilatedVarType vltype,
+                   int vlflags, int udims, int pdims, ...) VL_MT_UNSAFE;
     // ACCESSORS
     const char* name() const VL_MT_SAFE_POSTINIT { return m_namep; }
     const char* identifier() const VL_MT_SAFE_POSTINIT { return m_identifierp; }
@@ -752,8 +757,9 @@ public:  // But internals only - called from VerilatedModule's
 
 class VerilatedHierarchy final {
 public:
-    static void add(VerilatedScope* fromp, VerilatedScope* top);
-    static void remove(VerilatedScope* fromp, VerilatedScope* top);
+    static void add(const VerilatedScope* fromp, const VerilatedScope* top);
+    static void remove(const VerilatedScope* fromp, const VerilatedScope* top);
+    static void clear();
 };
 
 //===========================================================================
@@ -1037,18 +1043,13 @@ void VerilatedContext::timeprecision(int value) VL_MT_SAFE {
         m_s.m_timeprecision = value;
 #if VM_SC
         const sc_core::sc_time sc_res = sc_core::sc_get_time_resolution();
-        if (sc_res == sc_core::sc_time(1, sc_core::SC_SEC)) {
-            sc_prec = 0;
-        } else if (sc_res == sc_core::sc_time(1, sc_core::SC_MS)) {
-            sc_prec = 3;
-        } else if (sc_res == sc_core::sc_time(1, sc_core::SC_US)) {
-            sc_prec = 6;
-        } else if (sc_res == sc_core::sc_time(1, sc_core::SC_NS)) {
-            sc_prec = 9;
-        } else if (sc_res == sc_core::sc_time(1, sc_core::SC_PS)) {
-            sc_prec = 12;
-        } else if (sc_res == sc_core::sc_time(1, sc_core::SC_FS)) {
-            sc_prec = 15;
+        double mult = 1.0;
+        for (int i = 0; i < 16; i++) {
+            if (sc_res == sc_core::sc_time(mult, sc_core::SC_FS)) {
+                sc_prec = 15 - i;
+                break;
+            }
+            mult *= 10.0;
         }
         // SC_AS, SC_ZS, SC_YS not supported as no Verilog equivalent; will error below
 #endif

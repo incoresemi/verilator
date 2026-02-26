@@ -1,10 +1,10 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2023 by Yutetsu TAKATSUKASA.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Yutetsu TAKATSUKASA
 // SPDX-License-Identifier: CC0-1.0
 
-module t (/*AUTOARG*/);
+module t;
 
    logic [7:0] s0;
    logic [7:0] s1[1:2];

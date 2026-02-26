@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 class Cls;
@@ -15,14 +15,14 @@ endclass
 
 typedef Cls2 cls2_t;
 
-module t (/*AUTOARG*/);
+module t;
    Cls c;
    Cls2 c2;
    cls2_t ct2;
    ClsExt c_ext;
 
    task t(Cls c); endtask
-   function f(ClsExt c); endfunction
+   function void f(ClsExt c); endfunction
 
    initial begin
       c = 0;

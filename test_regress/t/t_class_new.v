@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 class ClsNoArg;
@@ -11,6 +11,17 @@ class ClsNoArg;
       imembera = 5;
       if (other != 6) $stop;
    endfunction : new
+   class InnerNoArg;
+      const int imembera;
+      function new();
+         int other = other_func();
+         imembera = 5;
+         if (other != 6) $stop;
+      endfunction
+      function int other_func();
+         return 6;
+      endfunction
+   endclass
    function int other_func();
       return 6;
    endfunction
@@ -46,12 +57,13 @@ class Cls2Arg;
    endfunction
 endclass
 
-module t (/*AUTOARG*/);
+module t;
    initial begin
       ClsNoArg c1;
       ClsArg   c2;
       Cls2Arg  c3;
       Cls2Arg  c4;
+      automatic ClsNoArg::InnerNoArg c5 = new;
 
       c1 = new;
       if (c1.imembera != 5) $stop;
@@ -71,6 +83,9 @@ module t (/*AUTOARG*/);
       c4 = c3.clone();
       if (c4.imembera != 6) $stop;
       if (c4.imemberb != 9) $stop;
+
+      c5 = new;
+      if (c5.imembera != 5) $stop;
 
       $write("*-* All Finished *-*\n");
       $finish;

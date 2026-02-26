@@ -5,11 +5,14 @@
 // This test is to check that bit selection of multi-dimensional signal inside
 // of a packed struct works. Currently +: and -: blow up with packed structs.
 //
-// This file ONLY is placed into the Public Domain, for any use, without
-// warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under The Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
-`define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); $stop; end while(0);
+// verilog_format: off
+`define stop $stop
+`define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0);
+// verilog_format: on
 
 // Test IEEE 1800-2023 concat bit selects, function bit selects, method bit selects
 
@@ -19,7 +22,7 @@ class Cls;
    endfunction
 endclass
 
-module t(/*AUTOARG*/);
+module t;
 
    Cls c;
 

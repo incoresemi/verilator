@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // Note UVM internals do not require classes-in-classes
@@ -18,7 +18,7 @@ class Cls #(type STORE_T=string);
 endclass : Cls
 endpackage : P
 
-module t (/*AUTOARG*/);
+module t;
    P::Cls#(int) c;
    initial begin
       c = new;
@@ -31,5 +31,8 @@ module t (/*AUTOARG*/);
       if (c.imemberb != 20) $stop;
       if (c.sc.smembera != 30) $stop;
       if (c.sc.smemberb != 40) $stop;
+
+      $write("*-* All Finished *-*\n");
+      $finish;
    end
 endmodule

@@ -1,12 +1,12 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2019 by Driss Hafdi.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Driss Hafdi
 // SPDX-License-Identifier: CC0-1.0
 
 `begin_keywords "VAMS-2.3"
 
-module t (/*AUTOARG*/);
+module t;
 
    // Just get errors on bad keywords (for code coverage)
    int above;

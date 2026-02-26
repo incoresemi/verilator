@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -69,9 +69,9 @@ private:
     // CONSTANTS
     // At least 2 words (64 fourstate bits). 4 words (128 fourstate bits) in most cases,
     // i.e. when std::string has 32 bytes.
-    static constexpr int INLINE_WORDS = vlstd::max(
-        static_cast<size_t>(2), vlstd::max(sizeof(std::string) / sizeof(ValueAndX),
-                                           sizeof(std::vector<ValueAndX>) / sizeof(ValueAndX)));
+    static constexpr int INLINE_WORDS = std::max(
+        static_cast<size_t>(2), std::max(sizeof(std::string) / sizeof(ValueAndX),
+                                         sizeof(std::vector<ValueAndX>) / sizeof(ValueAndX)));
     // When m_width > MAX_INLINE_WIDTH number is stored in m_dynamicNumber.
     // Otherwise number is stored in m_inlineNumber.
     static constexpr int MAX_INLINE_WIDTH = INLINE_WORDS * sizeof(ValueAndX) / 2 * 8;
@@ -356,6 +356,7 @@ public:
     V3Number& setLong(uint32_t value);
     V3Number& setLongS(int32_t value);
     V3Number& setDouble(double value);
+    void setBitX0(int bit);
     void setBit(int bit, char value) {  // Note: must be initialized as number and pre-zeroed!
         if (bit >= m_data.width()) return;
         const uint32_t mask = (1UL << (bit & 31));
@@ -407,7 +408,7 @@ public:
         if (bit < 0) return false;
         if (bit >= m_data.width()) return !bitIsXZ(m_data.width() - 1);
         const ValueAndX v = m_data.num()[bit / 32];
-        return ((v.m_value & (1UL << (bit & 31))) == 0 && !(v.m_valueX & (1UL << (bit & 31))));
+        return ((v.m_value | v.m_valueX) & (1UL << (bit & 31))) == 0;
     }
     bool bitIs1(int bit) const VL_MT_SAFE {
         if (!isNumber()) return false;
@@ -417,6 +418,7 @@ public:
         return ((v.m_value & (1UL << (bit & 31))) && !(v.m_valueX & (1UL << (bit & 31))));
     }
     bool bitIs1Extend(int bit) const {
+        // Correct number of zero bits/width matters
         if (!isNumber()) return false;
         if (bit < 0) return false;
         if (bit >= m_data.width()) return bitIs1Extend(m_data.width() - 1);
@@ -456,7 +458,10 @@ private:
     int countZ(int lsb, int nbits) const VL_MT_SAFE;
 
     int words() const VL_MT_SAFE { return ((width() + 31) / 32); }
-    uint32_t hiWordMask() const VL_MT_SAFE { return VL_MASK_I(width()); }
+    uint32_t hiWordMask() const VL_MT_SAFE {
+        // Correct number of zero bits/width matters
+        return VL_MASK_I(width());
+    }
 
     V3Number& opModDivGuts(const V3Number& lhs, const V3Number& rhs, bool is_modulus);
 
@@ -465,6 +470,11 @@ public:
     explicit V3Number(AstNode* nodep) { init(nodep, 1); }
     V3Number(AstNode* nodep, int width) {  // 0=unsized
         init(nodep, width, width > 0);
+    }
+    // Construct with value, changing to new width
+    V3Number(AstNode* nodep, int width, const V3Number& value) {
+        init(nodep, width, width > 0);
+        opAssign(value);
     }
     V3Number(AstNode* nodep, int width, uint32_t value, bool sized = true) {
         init(nodep, width, sized);
@@ -478,23 +488,29 @@ public:
         opCleanThis();
     }
     // Create from a verilog 32'hxxxx number.
-    V3Number(AstNode* nodep, const char* sourcep) { create(nodep, sourcep); }
-    V3Number(FileLine* flp, const char* sourcep) { create(flp, sourcep); }
+    class VerilogNumberLiteral {};  // For creator type-overload selection
+    V3Number(AstNode* nodep, VerilogNumberLiteral, const char* sourcep) { create(nodep, sourcep); }
+    V3Number(FileLine* flp, VerilogNumberLiteral, const char* sourcep) { create(flp, sourcep); }
     class VerilogStringLiteral {};  // For creator type-overload selection
-    V3Number(VerilogStringLiteral, AstNode* nodep, const string& str);
+    V3Number(AstNode* nodep, VerilogStringLiteral, const string& str);
+    class Double {};
+    V3Number(AstNode* nodep, Double, double value) {
+        init(nodep, 64);
+        setDouble(value);
+    }
     class String {};
-    V3Number(String, AstNode* nodep, const string& value) {
+    V3Number(AstNode* nodep, String, const string& value) {
         init(nodep);
         setString(value);
         m_data.m_fromString = true;
     }
     class OneStep {};
-    V3Number(OneStep, AstNode* nodep) {
+    V3Number(AstNode* nodep, OneStep) {
         init(nodep, 64);
         m_data.m_is1Step = true;
     }
     class Null {};
-    V3Number(Null, AstNode* nodep) {
+    V3Number(AstNode* nodep, Null) {
         init(nodep);
         m_data.setLogic();
         m_data.m_isNull = true;
@@ -509,10 +525,6 @@ public:
         m_data.num()[0].m_value = value;
         opCleanThis();
         m_fileline = nump->fileline();
-    }
-    V3Number(AstNode* nodep, double value) {
-        init(nodep, 64);
-        setDouble(value);
     }
     V3Number(AstNode* nodep, const AstNodeDType* nodedtypep);
 
@@ -554,7 +566,6 @@ private:
         }
     }
     static string displayPad(size_t fmtsize, char pad, bool left, const string& in) VL_PURE;
-    string displayed(FileLine* fl, const string& vformat) const VL_MT_STABLE;
     string displayed(const string& vformat) const VL_MT_STABLE {
         return displayed(m_fileline, vformat);
     }
@@ -581,10 +592,12 @@ public:
 
     // ACCESSORS
     string ascii(bool prefixed = true, bool cleanVerilog = false) const VL_MT_STABLE;
-    string displayed(AstNode* nodep, const string& vformat) const VL_MT_STABLE;
+    string displayed(const AstNode* nodep, const string& vformat) const VL_MT_STABLE;
+    string displayed(FileLine* fl, const string& vformat) const VL_MT_STABLE;
     static bool displayedFmtLegal(char format, bool isScan);  // Is this a valid format letter?
+    string emitC() const VL_MT_STABLE;
     int width() const VL_MT_SAFE { return m_data.width(); }
-    int widthMin() const;  // Minimum width that can represent this number (~== log2(num)+1)
+    int widthToFit() const;  // Minimum width that can represent this number (~== log2(num)+1)
     bool sized() const VL_MT_SAFE { return m_data.m_sized; }
     bool autoExtend() const VL_MT_SAFE { return m_data.m_autoExtend; }
     bool isFromString() const { return m_data.m_fromString; }
@@ -609,13 +622,16 @@ public:
         return m_data.type() == V3NumberDataType::LOGIC
                || m_data.type() == V3NumberDataType::DOUBLE;
     }
-    bool isNegative() const VL_MT_SAFE { return !isString() && bitIs1(width() - 1); }
+    bool isNegative() const VL_MT_SAFE {
+        // Correct number of zero bits/width matters
+        return !isString() && bitIs1(width() - 1);
+    }
     bool is1Step() const VL_MT_SAFE { return m_data.m_is1Step; }
     bool isNull() const VL_MT_SAFE { return m_data.m_isNull; }
     bool isFourState() const VL_MT_SAFE;
     bool hasZ() const {
         if (isString()) return false;
-        for (int i = 0; i < words(); i++) {
+        for (int i = 0; i < words(); ++i) {
             const ValueAndX v = m_data.num()[i];
             if ((~v.m_value) & v.m_valueX) return true;
         }
@@ -626,6 +642,7 @@ public:
     bool isEqZero() const VL_MT_SAFE;
     bool isNeqZero() const;
     bool isBitsZero(int msb, int lsb) const;
+    bool isBroken(int vwidth) const;
     bool isEqOne() const;
     bool isEqAllOnes(int optwidth = 0) const;
     bool isCaseEq(const V3Number& rhs) const;  // operator==
@@ -633,7 +650,10 @@ public:
     bool isAnyX() const VL_MT_SAFE;
     bool isAnyXZ() const;
     bool isAnyZ() const VL_MT_SAFE;
-    bool isMsbXZ() const { return bitIsXZ(m_data.width() - 1); }
+    bool isMsbXZ() const {
+        // Correct number of zero bits/width matters
+        return bitIsXZ(width() - 1);
+    }
     bool fitsInUInt() const VL_MT_SAFE;
     uint32_t toUInt() const VL_MT_SAFE;
     int32_t toSInt() const VL_MT_SAFE;
@@ -649,8 +669,7 @@ public:
     uint32_t countBits(const V3Number& ctrl) const;
     uint32_t countBits(const V3Number& ctrl1, const V3Number& ctrl2, const V3Number& ctrl3) const;
     uint32_t countOnes() const;
-    uint32_t
-    mostSetBitP1() const;  // Highest bit set plus one, IE for 16 return 5, for 0 return 0.
+    uint32_t mostSetBitP1() const;  // Highest bit set + 1, e.g. for 16 return 5, for 0 return 0
 
     // Operators
     bool operator<(const V3Number& rhs) const { return isLtXZ(rhs); }
@@ -700,6 +719,7 @@ public:
     V3Number& opWildEq(const V3Number& lhs, const V3Number& rhs);
     V3Number& opWildNeq(const V3Number& lhs, const V3Number& rhs);
     V3Number& opBufIf1(const V3Number& ens, const V3Number& if1s);
+    V3Number& opSetRange(uint32_t lsb, uint32_t width, char bitValue);
     // "standard" math
     V3Number& opNot(const V3Number& lhs);
     V3Number& opLogNot(const V3Number& lhs);

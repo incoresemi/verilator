@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # DESCRIPTION: Verilator: Verilog Test driver/expect definition
 #
-# Copyright 2024 by Wilson Snyder. This program is free software; you
-# can redistribute it and/or modify it under the terms of either the GNU
-# Lesser General Public License Version 3 or the Perl Artistic License
-# Version 2.0.
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of either the GNU Lesser General Public License Version 3
+# or the Perl Artistic License Version 2.0.
+# SPDX-FileCopyrightText: 2024 Wilson Snyder
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 import vltest_bootstrap
@@ -27,6 +27,9 @@ def check_all_file():
 
 
 def check_gcc_flags(filename):
+    # Coverage collection alters optimization flags
+    if test.have_dev_gcov:
+        return
     with open(filename, 'r', encoding="utf8") as fh:
         for line in fh:
             line = line.rstrip()
@@ -42,7 +45,7 @@ def check_gcc_flags(filename):
 if not test.make_version or float(test.make_version) < 4.1:
     test.skip("Test requires GNU Make version >= 4.1")
 
-test.compile(v_flags2=["--trace --output-split 0 --exe ../" + test.main_filename],
+test.compile(v_flags2=["--trace-vcd --output-split 0 --exe ../" + test.main_filename],
              verilator_make_gmake=False)
 
 # We don't use the standard test_regress rules, as want to test the rules

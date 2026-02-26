@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -22,6 +22,8 @@
 
 #include <map>
 #include <vector>
+
+VL_DEFINE_DEBUG_FUNCTIONS;
 
 // We use a static char array in VL_VALUE_STRING
 constexpr int VL_VALUE_STRING_MAX_WIDTH = 8192;
@@ -54,17 +56,23 @@ void EmitCFunc::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, 
     //  %k      Potential line break
     //  %P      Wide temporary name
     //  ,       Commas suppressed if the previous field is suppressed
-    string nextComma;
-    bool needComma = false;
-#define COMMA \
-    do { \
-        if (!nextComma.empty()) { \
-            puts(nextComma); \
-            nextComma = ""; \
-        } \
-    } while (false)
-
+    string out;
     putnbs(nodep, "");
+
+    bool needComma = false;
+    string nextComma;
+    auto commaOut = [&out, &nextComma]() {
+        if (!nextComma.empty()) {
+            out += nextComma;
+            nextComma = "";
+        }
+    };
+
+    auto putOut = [this, &out]() {
+        if (!out.empty()) puts(out);
+        out = "";
+    };
+
     for (string::const_iterator pos = format.begin(); pos != format.end(); ++pos) {
         if (pos[0] == ',') {
             // Remember we need to add one, but don't do yet to avoid ",)"
@@ -82,8 +90,11 @@ void EmitCFunc::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, 
             bool detail = false;
             AstNode* detailp = nullptr;
             switch (pos[0]) {
-            case '%': puts("%"); break;
-            case 'k': putbs(""); break;
+            case '%': out += '%'; break;
+            case 'k':
+                putOut();
+                putbs("");
+                break;
             case 'n':
                 detail = true;
                 detailp = nodep;
@@ -104,12 +115,13 @@ void EmitCFunc::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, 
                 if (nodep->isWide()) {
                     UASSERT_OBJ(m_wideTempRefp, nodep,
                                 "Wide Op w/ no temp, perhaps missing op in V3EmitC?");
-                    COMMA;
+                    commaOut();
+                    putOut();
                     if (!m_wideTempRefp->selfPointer().isEmpty()) {
                         emitDereference(m_wideTempRefp,
                                         m_wideTempRefp->selfPointerProtect(m_useSelfForThis));
                     }
-                    puts(m_wideTempRefp->varp()->nameProtect());
+                    out += m_wideTempRefp->varp()->nameProtect();
                     m_wideTempRefp = nullptr;
                     needComma = true;
                 }
@@ -120,22 +132,26 @@ void EmitCFunc::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, 
                 // Get next letter of %[nlrt]
                 ++pos;
                 switch (pos[0]) {
-                case 'q': emitIQW(detailp); break;
+                case 'q':
+                    putOut();
+                    emitIQW(detailp);
+                    break;
                 case 'w':
-                    COMMA;
-                    puts(cvtToStr(detailp->widthMin()));
+                    commaOut();
+                    out += cvtToStr(detailp->widthMin());
                     needComma = true;
                     break;
                 case 'W':
                     if (lhsp->isWide()) {
-                        COMMA;
-                        puts(cvtToStr(lhsp->widthWords()));
+                        commaOut();
+                        out += cvtToStr(lhsp->widthWords());
                         needComma = true;
                     }
                     break;
                 case 'i':
-                    COMMA;
+                    commaOut();
                     UASSERT_OBJ(detailp, nodep, "emitOperator() references undef node");
+                    putOut();
                     iterateAndNextConstNull(detailp);
                     needComma = true;
                     break;
@@ -146,20 +162,19 @@ void EmitCFunc::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, 
             }
         } else if (pos[0] == ')') {
             nextComma = "";
-            puts(")");
+            out += ')';
         } else if (pos[0] == '(') {
-            COMMA;
+            commaOut();
             needComma = false;
-            puts("(");
+            out += '(';
         } else {
             // Normal text
             if (std::isalnum(pos[0])) needComma = true;
-            COMMA;
-            string s;
-            s += pos[0];
-            puts(s);
+            commaOut();
+            out += pos[0];
         }
     }
+    putOut();
 }
 
 void EmitCFunc::displayEmit(AstNode* nodep, bool isScan) {
@@ -220,7 +235,7 @@ void EmitCFunc::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
-                    const bool addrof = isScan || (fmt == '@');
+                    const bool addrof = isScan || (fmt == '@') || (fmt == 'p');
                     if (addrof) puts("&(");
                     iterateConst(argp);
                     if (!addrof) emitDatap(argp);
@@ -247,17 +262,17 @@ void EmitCFunc::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const 
     AstNode* argp = nullptr;
     if (!ignore) {
         argp = *elistp;
+        if (VL_UNCOVERABLE(!argp)) {  // LCOV_EXCL_START
+            // expectDisplay() checks this first, so internal error if found here
+            dispp->v3error("Internal: Missing arguments for $display-like format");
+            return;
+        }  // LCOV_EXCL_STOP
         // Prep for next parameter
         *elistp = (*elistp)->nextp();
-        if (VL_UNCOVERABLE(!argp)) {
-            // expectDisplay() checks this first, so internal error if found here
-            dispp->v3error(
-                "Internal: Missing arguments for $display-like format");  // LCOV_EXCL_LINE
-            return;  // LCOV_EXCL_LINE
-        }
         if (argp->widthMin() > VL_VALUE_STRING_MAX_WIDTH) {
-            dispp->v3error("Exceeded limit of " + cvtToStr(VL_VALUE_STRING_MAX_WIDTH)
-                           + " bits for any $display-like arguments");
+            dispp->v3warn(E_UNSUPPORTED, "Unsupported: Exceeded limit of "
+                                             + cvtToStr(VL_VALUE_STRING_MAX_WIDTH)
+                                             + " bits for any $display-like arguments");
         }
         if (argp->widthMin() > 8 && fmtLetter == 'c') {
             // Technically legal, but surely not what the user intended.
@@ -289,18 +304,20 @@ void EmitCFunc::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const 
         }
         m_emitDispState.pushArg(fmtLetter, argp, "");
         if (fmtLetter == 't' || fmtLetter == '^') {
-            const AstSFormatF* fmtp = nullptr;
+            VTimescale timeunit = VTimescale::NONE;
             if (const AstDisplay* const nodep = VN_CAST(dispp, Display)) {
-                fmtp = nodep->fmtp();
+                timeunit = nodep->fmtp()->timeunit();
             } else if (const AstSFormat* const nodep = VN_CAST(dispp, SFormat)) {
-                fmtp = nodep->fmtp();
-            } else {
-                fmtp = VN_CAST(dispp, SFormatF);
+                timeunit = nodep->fmtp()->timeunit();
+            } else if (const AstSScanF* const nodep = VN_CAST(dispp, SScanF)) {
+                timeunit = nodep->timeunit();
+            } else if (const AstSFormatF* const nodep = VN_CAST(dispp, SFormatF)) {
+                timeunit = nodep->timeunit();
             }
-            UASSERT_OBJ(fmtp, dispp,
-                        "Use of %t must be under AstDisplay, AstSFormat, or AstSFormatF");
-            UASSERT_OBJ(!fmtp->timeunit().isNone(), fmtp, "timenunit must be set");
-            m_emitDispState.pushArg(' ', nullptr, cvtToStr((int)fmtp->timeunit().powerOfTen()));
+            UASSERT_OBJ(!timeunit.isNone(), dispp,
+                        "Use of %t must be under AstDisplay, AstSFormat, or AstSFormatF, or "
+                        "SScanF, and timeunit set");
+            m_emitDispState.pushArg(' ', nullptr, cvtToStr((int)timeunit.powerOfTen()));
         }
     } else {
         m_emitDispState.pushArg(fmtLetter, nullptr, "");
@@ -320,7 +337,7 @@ void EmitCFunc::displayNode(AstNode* nodep, AstScopeName* scopenamep, const stri
     bool inPct = false;
     bool ignore = false;
     for (; pos != vformat.end(); ++pos) {
-        // UINFO(1, "Parse '" << *pos << "'  IP" << inPct << " List " << cvtToHex(elistp) << endl);
+        // UINFO(1, "Parse '" << *pos << "'  IP" << inPct << " List " << cvtToHex(elistp));
         if (!inPct && pos[0] == '%') {
             inPct = true;
             ignore = false;
@@ -371,6 +388,7 @@ void EmitCFunc::displayNode(AstNode* nodep, AstScopeName* scopenamep, const stri
             case 'o': displayArg(nodep, &elistp, isScan, vfmt, ignore, 'o'); break;
             case 'h':  // FALLTHRU
             case 'x': displayArg(nodep, &elistp, isScan, vfmt, ignore, 'x'); break;
+            case 'p': displayArg(nodep, &elistp, isScan, vfmt, ignore, 'p'); break;
             case 's': displayArg(nodep, &elistp, isScan, vfmt, ignore, 's'); break;
             case 'e': displayArg(nodep, &elistp, isScan, vfmt, ignore, 'e'); break;
             case 'f': displayArg(nodep, &elistp, isScan, vfmt, ignore, 'f'); break;
@@ -456,9 +474,7 @@ void EmitCFunc::emitDereference(AstNode* nodep, const string& pointer) {
 
 void EmitCFunc::emitCvtPackStr(AstNode* nodep) {
     if (const AstConst* const constp = VN_CAST(nodep, Const)) {
-        putnbs(nodep, "std::string{");
-        putsQuoted(constp->num().toString());
-        puts("}");
+        emitConstantString(constp);
     } else if (VN_IS(nodep->dtypep(), StreamDType)) {
         putnbs(nodep, "VL_CVT_PACK_STR_ND(");
         iterateAndNextConstNull(nodep);
@@ -486,128 +502,38 @@ void EmitCFunc::emitCvtWideArray(AstNode* nodep, AstNode* fromp) {
     puts(")");
 }
 
-void EmitCFunc::emitConstant(AstConst* nodep, AstVarRef* assigntop, const string& assignString) {
+void EmitCFunc::emitConstant(AstConst* nodep) {
     // Put out constant set to the specified variable, or given variable in a string
-    putns(nodep, "");
-    if (nodep->num().isNull()) {
-        putns(nodep, "VlNull{}");
-    } else if (nodep->num().isFourState()) {
+    const V3Number& num = nodep->num();
+    if (num.isFourState()) {
         nodep->v3warn(E_UNSUPPORTED, "Unsupported: 4-state numbers in this context");
-    } else if (nodep->num().isString()) {
-        putnbs(nodep, "std::string{");
-        putsQuoted(nodep->num().toString());
-        puts("}");
-    } else if (nodep->isWide()) {
-        int upWidth = nodep->num().widthMin();
-        int chunks = 0;
-        if (upWidth > EMITC_NUM_CONSTW * VL_EDATASIZE) {
-            // Output e.g. 8 words in groups of e.g. 8
-            chunks = (upWidth - 1) / (EMITC_NUM_CONSTW * VL_EDATASIZE);
-            upWidth %= (EMITC_NUM_CONSTW * VL_EDATASIZE);
-            if (upWidth == 0) upWidth = (EMITC_NUM_CONSTW * VL_EDATASIZE);
-        }
-        {  // Upper e.g. 8 words
-            if (chunks) {
-                putnbs(nodep, "VL_CONSTHI_W_");
-                puts(cvtToStr(VL_WORDS_I(upWidth)));
-                puts("X(");
-                puts(cvtToStr(nodep->widthMin()));
-                puts(",");
-                puts(cvtToStr(chunks * EMITC_NUM_CONSTW * VL_EDATASIZE));
-            } else {
-                putnbs(nodep, "VL_CONST_W_");
-                puts(cvtToStr(VL_WORDS_I(upWidth)));
-                puts("X(");
-                puts(cvtToStr(nodep->widthMin()));
-            }
-            puts(",");
-            if (!assigntop) {
-                puts(assignString);
-            } else {
-                if (!assigntop->selfPointer().isEmpty()) {
-                    emitDereference(assigntop, assigntop->selfPointerProtect(m_useSelfForThis));
-                }
-                puts(assigntop->varp()->nameProtect());
-            }
-            for (int word = VL_WORDS_I(upWidth) - 1; word >= 0; word--) {
-                // Only 32 bits - llx + long long here just to appease CPP format warning
-                ofp()->printf(",0x%08" PRIx64, static_cast<uint64_t>(nodep->num().edataWord(
-                                                   word + chunks * EMITC_NUM_CONSTW)));
-            }
-            puts(")");
-        }
-        for (chunks--; chunks >= 0; chunks--) {
-            puts(";\n");
-            putbs("VL_CONSTLO_W_");
-            puts(cvtToStr(EMITC_NUM_CONSTW));
-            puts("X(");
-            puts(cvtToStr(chunks * EMITC_NUM_CONSTW * VL_EDATASIZE));
-            puts(",");
-            if (!assigntop) {
-                puts(assignString);
-            } else {
-                if (!assigntop->selfPointer().isEmpty()) {
-                    emitDereference(assigntop, assigntop->selfPointerProtect(m_useSelfForThis));
-                }
-                puts(assigntop->varp()->nameProtect());
-            }
-            for (int word = EMITC_NUM_CONSTW - 1; word >= 0; word--) {
-                // Only 32 bits - llx + long long here just to appease CPP format warning
-                ofp()->printf(",0x%08" PRIx64, static_cast<uint64_t>(nodep->num().edataWord(
-                                                   word + chunks * EMITC_NUM_CONSTW)));
-            }
-            puts(")");
-        }
-    } else if (nodep->isDouble()) {
-        if (int(nodep->num().toDouble()) == nodep->num().toDouble()
-            && nodep->num().toDouble() < 1000 && nodep->num().toDouble() > -1000) {
-            ofp()->printf("%3.1f", nodep->num().toDouble());  // Force decimal point
-        } else if (std::isinf(nodep->num().toDouble())) {
-            if (std::signbit(nodep->num().toDouble())) puts("-");
-            ofp()->puts("std::numeric_limits<double>::infinity()");
-        } else if (std::isnan(nodep->num().toDouble())) {
-            if (std::signbit(nodep->num().toDouble())) puts("-");
-            ofp()->puts("std::numeric_limits<double>::quiet_NaN()");
-        } else {
-            // Not %g as will not always put in decimal point, so not obvious to compiler
-            // is a real number
-            ofp()->printf("%.17e", nodep->num().toDouble());
-        }
-    } else if (nodep->isQuad()) {
-        const uint64_t num = nodep->toUQuad();
-        if (num < 10) {
-            ofp()->printf("%" PRIu64 "ULL", num);
-        } else {
-            ofp()->printf("0x%" PRIx64 "ULL", num);
-        }
-    } else {
-        const uint32_t num = nodep->toUInt();
-        // Only 32 bits - llx + long long here just to appease CPP format warning
-        if (num < 10) {
-            puts(cvtToStr(num));
-        } else {
-            ofp()->printf("0x%" PRIx64, static_cast<uint64_t>(num));
-        }
-        // If signed, we'll do our own functions
-        // But must be here, or <= comparisons etc may end up signed
-        puts("U");
+        return;
     }
+    putns(nodep, num.emitC());
+}
+
+void EmitCFunc::emitConstantString(const AstConst* nodep) {
+    // Const might be a Verilog array-type string, but need to always output std::string
+    putnbs(nodep, "std::string{");
+    const string str = nodep->num().toString();
+    if (!str.empty()) putsQuoted(str);
+    puts("}");
 }
 
 void EmitCFunc::emitSetVarConstant(const string& assignString, AstConst* constp) {
-    if (!constp->isWide()) {
-        puts(assignString);
-        puts(" = ");
-    }
-    emitConstant(constp, nullptr, assignString);
+    puts(assignString);
+    puts(" = ");
+    emitConstant(constp);
     puts(";\n");
 }
 
-void EmitCFunc::emitVarReset(AstVar* varp) {
+void EmitCFunc::emitVarReset(AstVar* varp, bool constructing) {
+    // 'constructing' indicates that the object was just constructed, so no need to clear it also
     AstNodeDType* const dtypep = varp->dtypep()->skipRefp();
+    const string vlSelf = VSelfPointerText::replaceThis(m_useSelfForThis, "this->");
     const string varNameProtected = (VN_IS(m_modp, Class) || varp->isFuncLocal())
                                         ? varp->nameProtect()
-                                        : "vlSelf->" + varp->nameProtect();
+                                        : vlSelf + varp->nameProtect();
     if (varp->isIO() && m_modp->isTop() && optSystemC()) {
         // System C top I/O doesn't need loading, as the lower level subinst code does it.}
     } else if (varp->isParam()) {
@@ -616,11 +542,14 @@ void EmitCFunc::emitVarReset(AstVar* varp) {
         // If an ARRAYINIT we initialize it using an initial block similar to a signal
         // puts("// parameter "+varp->nameProtect()+" = "+varp->valuep()->name()+"\n");
     } else if (const AstInitArray* const initarp = VN_CAST(varp->valuep(), InitArray)) {
+        // TODO this code probably better handled as initp argument to emitVarResetRecurse
+        // TODO merge this functionality with V3EmitCConstInit.h visitors
         if (VN_IS(dtypep, AssocArrayDType)) {
             if (initarp->defaultp()) {
                 emitSetVarConstant(varNameProtected + ".atDefault()",
                                    VN_AS(initarp->defaultp(), Const));
             }
+            if (!constructing) puts(varNameProtected + ".clear();");
             const auto& mapr = initarp->map();
             for (const auto& itr : mapr) {
                 AstNode* const valuep = itr.second->valuep();
@@ -632,6 +561,7 @@ void EmitCFunc::emitVarReset(AstVar* varp) {
                 emitSetVarConstant(varNameProtected + ".atDefault()",
                                    VN_AS(initarp->defaultp(), Const));
             }
+            if (!constructing) puts(varNameProtected + ".clear();");
             const auto& mapr = initarp->map();
             for (const auto& itr : mapr) {
                 AstNode* const valuep = itr.second->valuep();
@@ -655,25 +585,31 @@ void EmitCFunc::emitVarReset(AstVar* varp) {
             varp->v3fatalSrc("InitArray under non-arrayed var");
         }
     } else {
-        putns(varp, emitVarResetRecurse(varp, varNameProtected, dtypep, 0, ""));
+        putns(varp, emitVarResetRecurse(varp, constructing, varNameProtected, dtypep, 0, "",
+                                        varp->valuep()));
     }
 }
 
-string EmitCFunc::emitVarResetRecurse(const AstVar* varp, const string& varNameProtected,
-                                      AstNodeDType* dtypep, int depth, const string& suffix) {
+string EmitCFunc::emitVarResetRecurse(const AstVar* varp, bool constructing,
+                                      const string& varNameProtected, AstNodeDType* dtypep,
+                                      int depth, const string& suffix, const AstNode* valuep) {
     dtypep = dtypep->skipRefp();
     AstBasicDType* const basicp = dtypep->basicp();
     // Returns string to do resetting, empty to do nothing (which caller should handle)
     if (AstAssocArrayDType* const adtypep = VN_CAST(dtypep, AssocArrayDType)) {
         // Access std::array as C array
         const string cvtarray = (adtypep->subDTypep()->isWide() ? ".data()" : "");
-        return emitVarResetRecurse(varp, varNameProtected, adtypep->subDTypep(), depth + 1,
-                                   suffix + ".atDefault()" + cvtarray);
+        const string pre = constructing ? "" : varNameProtected + suffix + ".clear();\n";
+        return pre
+               + emitVarResetRecurse(varp, constructing, varNameProtected, adtypep->subDTypep(),
+                                     depth + 1, suffix + ".atDefault()" + cvtarray, nullptr);
     } else if (AstWildcardArrayDType* const adtypep = VN_CAST(dtypep, WildcardArrayDType)) {
         // Access std::array as C array
         const string cvtarray = (adtypep->subDTypep()->isWide() ? ".data()" : "");
-        return emitVarResetRecurse(varp, varNameProtected, adtypep->subDTypep(), depth + 1,
-                                   suffix + ".atDefault()" + cvtarray);
+        const string pre = constructing ? "" : varNameProtected + suffix + ".clear();\n";
+        return pre
+               + emitVarResetRecurse(varp, constructing, varNameProtected, adtypep->subDTypep(),
+                                     depth + 1, suffix + ".atDefault()" + cvtarray, nullptr);
     } else if (VN_IS(dtypep, CDType)) {
         return "";  // Constructor does it
     } else if (VN_IS(dtypep, ClassRefDType)) {
@@ -683,13 +619,17 @@ string EmitCFunc::emitVarResetRecurse(const AstVar* varp, const string& varNameP
     } else if (const AstDynArrayDType* const adtypep = VN_CAST(dtypep, DynArrayDType)) {
         // Access std::array as C array
         const string cvtarray = (adtypep->subDTypep()->isWide() ? ".data()" : "");
-        return emitVarResetRecurse(varp, varNameProtected, adtypep->subDTypep(), depth + 1,
-                                   suffix + ".atDefault()" + cvtarray);
+        const string pre = constructing ? "" : varNameProtected + suffix + ".clear();\n";
+        return pre
+               + emitVarResetRecurse(varp, constructing, varNameProtected, adtypep->subDTypep(),
+                                     depth + 1, suffix + ".atDefault()" + cvtarray, nullptr);
     } else if (const AstQueueDType* const adtypep = VN_CAST(dtypep, QueueDType)) {
         // Access std::array as C array
         const string cvtarray = (adtypep->subDTypep()->isWide() ? ".data()" : "");
-        return emitVarResetRecurse(varp, varNameProtected, adtypep->subDTypep(), depth + 1,
-                                   suffix + ".atDefault()" + cvtarray);
+        const string pre = constructing ? "" : varNameProtected + suffix + ".clear();\n";
+        return pre
+               + emitVarResetRecurse(varp, constructing, varNameProtected, adtypep->subDTypep(),
+                                     depth + 1, suffix + ".atDefault()" + cvtarray, nullptr);
     } else if (VN_IS(dtypep, SampleQueueDType)) {
         return "";
     } else if (const AstUnpackArrayDType* const adtypep = VN_CAST(dtypep, UnpackArrayDType)) {
@@ -698,24 +638,25 @@ string EmitCFunc::emitVarResetRecurse(const AstVar* varp, const string& varNameP
         const string ivar = "__Vi"s + cvtToStr(depth);
         const string pre = ("for (int " + ivar + " = " + cvtToStr(0) + "; " + ivar + " < "
                             + cvtToStr(adtypep->elementsConst()) + "; ++" + ivar + ") {\n");
-        const string below = emitVarResetRecurse(varp, varNameProtected, adtypep->subDTypep(),
-                                                 depth + 1, suffix + "[" + ivar + "]");
+        const string below
+            = emitVarResetRecurse(varp, constructing, varNameProtected, adtypep->subDTypep(),
+                                  depth + 1, suffix + "[" + ivar + "]", nullptr);
         const string post = "}\n";
         return below.empty() ? "" : pre + below + post;
     } else if (VN_IS(dtypep, NodeUOrStructDType) && !VN_AS(dtypep, NodeUOrStructDType)->packed()) {
-        const auto* const sdtypep = VN_AS(dtypep, NodeUOrStructDType);
+        const AstNodeUOrStructDType* const sdtypep = VN_AS(dtypep, NodeUOrStructDType);
         string literal;
         for (const AstMemberDType* itemp = sdtypep->membersp(); itemp;
              itemp = VN_AS(itemp->nextp(), MemberDType)) {
-            const std::string line
-                = emitVarResetRecurse(varp, varNameProtected + suffix + "." + itemp->nameProtect(),
-                                      itemp->dtypep(), depth + 1, "");
+            const std::string line = emitVarResetRecurse(
+                varp, constructing, varNameProtected + suffix + "." + itemp->nameProtect(),
+                itemp->dtypep(), depth + 1, "", itemp->valuep());
             if (!line.empty()) literal += line;
         }
         return literal;
     } else if (basicp && basicp->keyword() == VBasicDTypeKwd::STRING) {
-        // String's constructor deals with it
-        return "";
+        if (constructing) return "";  // String's constructor deals with it
+        return varNameProtected + suffix + ".clear();\n";
     } else if (basicp && basicp->isForkSync()) {
         return "";
     } else if (basicp && basicp->isProcessRef()) {
@@ -726,45 +667,70 @@ string EmitCFunc::emitVarResetRecurse(const AstVar* varp, const string& varNameP
         return "";
     } else if (basicp && basicp->isDynamicTriggerScheduler()) {
         return "";
-    } else if (basicp && basicp->isRandomGenerator()) {
+    } else if (basicp && (basicp->isRandomGenerator() || basicp->isStdRandomGenerator())) {
         return "";
+    } else if (basicp && (basicp->isEvent())) {
+        return "VlAssignableEvent{};\n";
     } else if (basicp) {
         const bool zeroit
             = (varp->attrFileDescr()  // Zero so we don't do file IO if never $fopen
                || varp->isFuncLocal()  // Randomization too slow
                || (basicp && basicp->isZeroInit())
                || (v3Global.opt.underlineZero() && !varp->name().empty() && varp->name()[0] == '_')
-               || (v3Global.opt.xInitial() == "fast" || v3Global.opt.xInitial() == "0"));
+               || (varp->varType().isTemp() && !varp->isXTemp())
+               || (varp->isXTemp()
+                       ? (v3Global.opt.xAssign() != "unique")
+                       : (v3Global.opt.xInitial() == "fast" || v3Global.opt.xInitial() == "0")));
         const bool slow = !varp->isFuncLocal() && !varp->isClassMember();
         splitSizeInc(1);
         if (dtypep->isWide()) {  // Handle unpacked; not basicp->isWide
             string out;
-            if (varp->valuep()) {
-                const AstConst* const constp = VN_AS(varp->valuep(), Const);
+            if (valuep) {
+                const AstConst* const constp = VN_AS(valuep, Const);
                 UASSERT_OBJ(constp, varp, "non-const initializer for variable");
-                for (int w = 0; w < varp->widthWords(); ++w) {
+                for (int w = 0; w < dtypep->widthWords(); ++w) {
                     out += varNameProtected + suffix + "[" + cvtToStr(w) + "] = ";
                     out += cvtToStr(constp->num().edataWord(w)) + "U;\n";
                 }
             } else {
-                out += zeroit ? (slow ? "VL_ZERO_RESET_W(" : "VL_ZERO_W(") : "VL_RAND_RESET_W(";
+                out += zeroit ? (slow ? "VL_ZERO_RESET_W(" : "VL_ZERO_W(")
+                              : (varp->isXTemp() ? "VL_SCOPED_RAND_RESET_ASSIGN_W("
+                                                 : "VL_SCOPED_RAND_RESET_W(");
                 out += cvtToStr(dtypep->widthMin());
-                out += ", " + varNameProtected + suffix + ");\n";
+                out += ", " + varNameProtected + suffix;
+                if (!zeroit) {
+                    emitVarResetScopeHash();
+                    const uint64_t salt = VString::hashMurmur(varp->prettyName());
+                    out += ", ";
+                    out += m_classOrPackage ? m_classOrPackageHash : "__VscopeHash";
+                    out += ", ";
+                    out += std::to_string(salt);
+                    out += "ull";
+                }
+                out += ");\n";
             }
             return out;
         } else {
             string out = varNameProtected + suffix;
-            // If --x-initial-edge is set, we want to force an initial
-            // edge on uninitialized clocks (from 'X' to whatever the
-            // first value is). Since the class is instantiated before
-            // initial blocks are evaluated, this should not clash
-            // with any initial block settings.
-            if (zeroit || (v3Global.opt.xInitialEdge() && varp->isUsedClock())) {
+            if (valuep) {
+                out += " = ";
+                // TODO cleanup code shared between here, V3EmitCConstInit.h,
+                // EmitCFunc::emitVarReset, EmitCFunc::emitConstant
+                const AstConst* const constp = VN_AS(valuep, Const);
+                UASSERT_OBJ(constp, varp, "non-const initializer for variable");
+                out += cvtToStr(constp->num().edataWord(0)) + "U;\n";
+                out += ";\n";
+            } else if (zeroit) {
                 out += " = 0;\n";
             } else {
-                out += " = VL_RAND_RESET_";
+                emitVarResetScopeHash();
+                const uint64_t salt = VString::hashMurmur(varp->prettyName());
+                out += " = VL_SCOPED_RAND_RESET_";
+                if (varp->isXTemp()) out += "ASSIGN_";
                 out += dtypep->charIQWN();
-                out += "(" + cvtToStr(dtypep->widthMin()) + ");\n";
+                out += "(" + cvtToStr(dtypep->widthMin()) + ", "
+                       + (m_classOrPackage ? m_classOrPackageHash : "__VscopeHash") + ", "
+                       + std::to_string(salt) + "ull);\n";
             }
             return out;
         }
@@ -772,4 +738,16 @@ string EmitCFunc::emitVarResetRecurse(const AstVar* varp, const string& varNameP
         v3fatalSrc("Unknown node type in reset generator: " << varp->prettyTypeName());
     }
     return "";
+}
+
+void EmitCFunc::emitVarResetScopeHash() {
+    if (VL_LIKELY(m_createdScopeHash)) { return; }
+    if (m_classOrPackage) {
+        m_classOrPackageHash
+            = std::to_string(VString::hashMurmur(m_classOrPackage->name())) + "ULL";
+    } else {
+        puts(string("const uint64_t __VscopeHash = VL_MURMUR64_HASH(")
+             + (m_useSelfForThis ? "vlSelf" : "this") + "->vlNamep);\n");
+    }
+    m_createdScopeHash = true;
 }

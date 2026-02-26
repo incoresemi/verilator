@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2021 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2021 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `ifdef verilator
@@ -17,17 +17,19 @@ class Cls;
    bit [15:0] carray4 [4];
    bit [64:0] cwide[2];
    string     name;
+   real r;
    task debug();
       $display("DEBUG: %s (@%0t) %s", this.name, $realtime, "message");
    endtask
 endclass
 
-module t (/*AUTOARG*/);
+module t;
    initial begin
       Cls c;
       c = new;
       c.b = '1;
       c.i = 42;
+      c.r = 2.2;
       c.name = "object_name";
 
       c.carray4[0] = 16'h11;

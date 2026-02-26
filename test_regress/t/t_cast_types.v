@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define TRY_ASSIGN(a,b) a = b
@@ -41,7 +41,7 @@ typedef struct packed { int a; int b; } stpack_t;
 typedef bit signed [7:0] simple_a_t;
 typedef bit signed [7:0] simple_a1_t;
 
-module t (/*AUTOARG*/);
+module t;
 
    real    v_real;      // IEEE 6.12.2 - by rounding
    string  v_string;

@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Andrew Ranck
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Andrew Ranck
 // SPDX-License-Identifier: CC0-1.0
 
 // Test for Issue#5358: Support default value on module input.
@@ -43,6 +43,15 @@ module dut_default_input_logic32
 endmodule
 
 
+module dut_default_input_wire32
+  (
+  input wire [31:0] i = 32'h12345678,
+  output logic [31:0] o
+   );
+  assign o = i;
+endmodule
+
+
 module t
   (/*AUTOARG*/
    // Inputs
@@ -73,6 +82,12 @@ module t
      /*.i(),*/
      .o(dut0_o_default));
 
+  logic dut0_o_default_b;
+  dut_default_input0 u_dut0_default_b
+    (.required_input(1),
+     /*.i(),*/
+     .o(dut0_o_default_b));
+
   logic dut1_o_default;
   dut_default_input1 u_dut1_default
     (/*.i(),*/
@@ -92,6 +107,11 @@ module t
     (.required_input(1),
      .i(),  // open
      .o(dut0_o_open));
+  logic        dut0_o_open_b;
+  dut_default_input0 u_dut0_open_b
+    (.required_input(1),
+     .i(),  // open
+     .o(dut0_o_open_b));
 
   logic        dut1_o_open;
   dut_default_input1 u_dut1_open
@@ -104,15 +124,25 @@ module t
     (.i(),  // open
      .o(dut_logic32_o_open));
 
+  logic [31:0] dut_wire32_o_open;
+  dut_default_input_wire32 u_dut_wire32_open
+    (.i(),  // open
+     .o(dut_wire32_o_open));
+
 
   // 3. DUT instances with overriden values
   // instance names are u_dut*_overriden
   // Have u_dut0_overriden get its overriden value from a signal
-  logic        dut0_o_overriden;
+  logic dut0_o_overriden;
   dut_default_input0 u_dut0_overriden
     (.required_input(1),
      .i(logic1),  // from wire
      .o(dut0_o_overriden));
+  logic dut0_o_overriden_b;
+  dut_default_input0 u_dut0_overriden_b
+    (.required_input(1),
+     .i(logic1),  // from wire
+     .o(dut0_o_overriden_b));
 
   // Have u_dut1_overriden get its overriden value from a function.
   logic        dut1_o_overriden;
@@ -153,6 +183,7 @@ module t
       if (dut0_o_open != 0) $error;
       if (dut1_o_open != 1) $error;
       if (dut_logic32_o_open != 32'h1234_5678) $error;
+      if (dut_wire32_o_open != 32'h1234_5678) $error;
 
       // despite the port map override. At least the parameter goes through?
       $display("%t %m: outputs  - overrides got {%0d %0d %0x} want {1 0 %0x}",

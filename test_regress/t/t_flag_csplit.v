@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2005 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2005 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -29,7 +29,7 @@ module t (/*AUTOARG*/
       cyc <= cyc + 1;
       if (cyc==0) begin
          // Setup
-         w0 = 32'h1234;
+         w0 <= 32'h1234;
       end
       else if (cyc<90) begin
       end
@@ -39,6 +39,7 @@ module t (/*AUTOARG*/
          $write("[%0t] cyc==%0d  sum=%x\n", $time, cyc, w[CNT]);
 `endif
          if (w[CNT] !== `EXPECTED_SUM) $stop;
+         $display("cyc: %0d $past(cyc): %0d", cyc, $past(cyc));
          $write("*-* All Finished *-*\n");
          $finish;
       end
@@ -53,4 +54,9 @@ module sub (input clk, input [31:0] i, output [31:0] z);
      z_tmp <= i+1+$c("0");  // $c so doesn't optimize away
 
    assign z = z_tmp;
+
+   always @(posedge z_tmp == 32'b11) begin
+     $display("%m z_tmp: %0d, $past(z_tmp): $0d", z_tmp, $past(z_tmp));
+   end
+
 endmodule

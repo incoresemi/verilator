@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -58,6 +58,7 @@ class SliceVisitor final : public VNVisitor {
 
     // STATE - across all visitors
     VDouble0 m_statAssigns;  // Statistic tracking
+    VDouble0 m_statSliceElementSkips;  // Statistic tracking
 
     // STATE - for current visit position (use VL_RESTORER)
     AstNode* m_assignp = nullptr;  // Assignment we are under
@@ -65,7 +66,8 @@ class SliceVisitor final : public VNVisitor {
     bool m_okInitArray = false;  // Allow InitArray children
 
     // METHODS
-    AstNodeExpr* cloneAndSel(AstNode* nodep, int elements, int elemIdx) {
+    AstNodeExpr* cloneAndSel(AstNodeExpr* const nodep, int elements, int elemIdx,
+                             const bool needPure) {
         // Insert an ArraySel, except for a few special cases
         const AstUnpackArrayDType* const arrayp
             = VN_CAST(nodep->dtypep()->skipRefp(), UnpackArrayDType);
@@ -79,7 +81,7 @@ class SliceVisitor final : public VNVisitor {
             }
             m_assignError = true;
             // Likely will cause downstream errors
-            return VN_AS(nodep, NodeExpr)->cloneTree(false);
+            return nodep->cloneTree(false, needPure);
         }
         if (arrayp->rangep()->elementsConst() != elements) {
             if (!m_assignError) {
@@ -93,7 +95,7 @@ class SliceVisitor final : public VNVisitor {
         }
         AstNodeExpr* newp;
         if (AstInitArray* const initp = VN_CAST(nodep, InitArray)) {
-            UINFO(9, "  cloneInitArray(" << elements << "," << elemIdx << ") " << nodep << endl);
+            UINFO(9, "  cloneInitArray(" << elements << "," << elemIdx << ") " << nodep);
 
             auto considerOrder = [](const auto* nodep, int idxFromLeft) -> int {
                 return !nodep->rangep()->ascending()
@@ -123,6 +125,7 @@ class SliceVisitor final : public VNVisitor {
                     nodep->v3error("Array initialization has too few elements, need element "
                                    << elemIdx);
                     m_assignError = true;
+                    break;
                 }
                 const AstNodeDType* itemRawDTypep = itemp->dtypep()->skipRefp();
                 const VCastable castable
@@ -189,28 +192,36 @@ class SliceVisitor final : public VNVisitor {
                 }
             }
             if (!newp) newp = new AstConst{nodep->fileline(), 0};
-        } else if (AstNodeCond* const snodep = VN_CAST(nodep, NodeCond)) {
-            UINFO(9, "  cloneCond(" << elements << "," << elemIdx << ") " << nodep << endl);
-            return snodep->cloneType(snodep->condp()->cloneTreePure(false),
-                                     cloneAndSel(snodep->thenp(), elements, elemIdx),
-                                     cloneAndSel(snodep->elsep(), elements, elemIdx));
+        } else if (AstCond* const snodep = VN_CAST(nodep, Cond)) {
+            UINFO(9, "  cloneCond(" << elements << "," << elemIdx << ") " << nodep);
+            return new AstCond{snodep->fileline(), snodep->condp()->cloneTree(false, needPure),
+                               cloneAndSel(snodep->thenp(), elements, elemIdx, needPure),
+                               cloneAndSel(snodep->elsep(), elements, elemIdx, needPure)};
         } else if (const AstSliceSel* const snodep = VN_CAST(nodep, SliceSel)) {
-            UINFO(9, "  cloneSliceSel(" << elements << "," << elemIdx << ") " << nodep << endl);
+            UINFO(9, "  cloneSliceSel(" << elements << "," << elemIdx << ") " << nodep);
             const int leOffset = (snodep->declRange().lo()
                                   + (!snodep->declRange().ascending()
                                          ? snodep->declRange().elements() - 1 - elemIdx
                                          : elemIdx));
-            newp = new AstArraySel{nodep->fileline(), snodep->fromp()->cloneTreePure(false),
+            newp = new AstArraySel{nodep->fileline(), snodep->fromp()->cloneTree(false, needPure),
                                    leOffset};
-        } else if (VN_IS(nodep, ArraySel) || VN_IS(nodep, NodeVarRef) || VN_IS(nodep, NodeSel)
-                   || VN_IS(nodep, CMethodHard) || VN_IS(nodep, MemberSel)
-                   || VN_IS(nodep, ExprStmt) || VN_IS(nodep, StructSel)) {
-            UINFO(9, "  cloneSel(" << elements << "," << elemIdx << ") " << nodep << endl);
+        } else if (AstExprStmt* const snodep = VN_CAST(nodep, ExprStmt)) {
+            UINFO(9, "  cloneExprStmt(" << elements << "," << elemIdx << ") " << nodep);
+            AstNodeExpr* const resultSelp
+                = cloneAndSel(snodep->resultp(), elements, elemIdx, needPure);
+            if (snodep->stmtsp()) {
+                return new AstExprStmt{nodep->fileline(), snodep->stmtsp()->unlinkFrBackWithNext(),
+                                       resultSelp};
+            } else {
+                return resultSelp;
+            }
+        } else if (VN_IS(nodep, NodeVarRef) || VN_IS(nodep, NodeSel) || VN_IS(nodep, CMethodHard)
+                   || VN_IS(nodep, MemberSel) || VN_IS(nodep, StructSel)) {
+            UINFO(9, "  cloneSel(" << elements << "," << elemIdx << ") " << nodep);
             const int leOffset = !arrayp->rangep()->ascending()
                                      ? arrayp->rangep()->elementsConst() - 1 - elemIdx
                                      : elemIdx;
-            newp = new AstArraySel{nodep->fileline(), VN_AS(nodep, NodeExpr)->cloneTreePure(false),
-                                   leOffset};
+            newp = new AstArraySel{nodep->fileline(), nodep->cloneTree(false, needPure), leOffset};
         } else {
             if (!m_assignError) {
                 nodep->v3error(nodep->prettyTypeName()
@@ -218,7 +229,7 @@ class SliceVisitor final : public VNVisitor {
             }
             m_assignError = true;
             // Likely will cause downstream errors
-            newp = VN_AS(nodep, NodeExpr)->cloneTree(false);
+            newp = nodep->cloneTree(false, needPure);
         }
         return newp;
     }
@@ -230,6 +241,7 @@ class SliceVisitor final : public VNVisitor {
         const AstUnpackArrayDType* const arrayp = VN_CAST(dtp, UnpackArrayDType);
         if (!arrayp) return false;
         if (VN_IS(stp, CvtPackedToArray)) return false;
+        if (VN_IS(stp, CReset)) return false;
 
         // Any isSc variables must be expanded regardless of --fno-slice
         const bool hasSc
@@ -239,7 +251,16 @@ class SliceVisitor final : public VNVisitor {
             return false;
         }
 
-        UINFO(4, "Slice optimizing " << nodep << endl);
+        // Skip optimization if array is too large
+        const int elements = arrayp->rangep()->elementsConst();
+        const int elementLimit = v3Global.opt.fSliceElementLimit();
+        if (elements > elementLimit && elementLimit > 0) {
+            ++m_statSliceElementSkips;
+            m_okInitArray = true;  // VL_RESTORER in visit(AstNodeAssign)
+            return false;
+        }
+
+        UINFO(4, "Slice optimizing " << nodep);
         ++m_statAssigns;
 
         // Left and right could have different ascending/descending range,
@@ -247,15 +268,25 @@ class SliceVisitor final : public VNVisitor {
         // Assign of an ascending range slice to a descending range one must reverse
         // the elements
         AstNodeAssign* newlistp = nullptr;
-        const int elements = arrayp->rangep()->elementsConst();
         for (int elemIdx = 0; elemIdx < elements; ++elemIdx) {
+            // Original node is replaced, so it is safe to copy it one time even if it is impure.
             AstNodeAssign* const newp
-                = nodep->cloneType(cloneAndSel(nodep->lhsp(), elements, elemIdx),
-                                   cloneAndSel(nodep->rhsp(), elements, elemIdx));
-            if (debug() >= 9) newp->dumpTree("-  new: ");
+                = nodep->cloneType(cloneAndSel(nodep->lhsp(), elements, elemIdx, elemIdx != 0),
+                                   cloneAndSel(nodep->rhsp(), elements, elemIdx, elemIdx != 0));
+            if (elemIdx == 0) {
+                nodep->foreach([this](AstExprStmt* const exprp) {
+                    // Result expression is always evaluated to the same value, so the statements
+                    // can be removed once they were included in the expression created for the 1st
+                    // element.
+                    AstNodeExpr* const resultp = exprp->resultp()->unlinkFrBack();
+                    exprp->replaceWith(resultp);
+                    VL_DO_DANGLING(pushDeletep(exprp), exprp);
+                });
+            }
+            UINFOTREE(9, newp, "", "new");
             newlistp = AstNode::addNext(newlistp, newp);
         }
-        if (debug() >= 9) nodep->dumpTree("-  Deslice-Dn: ");
+        UINFOTREE(9, nodep, "", "Deslice-Dn");
         nodep->replaceWith(newlistp);
         VL_DO_DANGLING(nodep->deleteTree(), nodep);
         // Normal edit iterator will now iterate on all of the expansion assignments
@@ -266,8 +297,7 @@ class SliceVisitor final : public VNVisitor {
     void visit(AstNodeAssign* nodep) override {
         // Called recursively on newly created assignments
         if (nodep->user1SetOnce()) return;  // Process once
-        if (VN_IS(nodep, AssignAlias)) return;
-        if (debug() >= 9) nodep->dumpTree("-  Deslice-In: ");
+        UINFOTREE(9, nodep, "", "Deslice-In");
         VL_RESTORER(m_assignError);
         VL_RESTORER(m_assignp);
         VL_RESTORER(m_okInitArray);  // Set in assignOptimize
@@ -297,57 +327,61 @@ class SliceVisitor final : public VNVisitor {
                     "Array initialization should have been removed earlier");
     }
 
-    void expandBiOp(AstNodeBiop* nodep) {
+    template <typename T_NodeBiop>
+    void expandBiOp(T_NodeBiop* biopp) {
+        AstNodeBiop* nodep = biopp;
         if (nodep->user1SetOnce()) return;  // Process once
-        // If it's an unpacked array, blow it up into comparing each element
-        AstNodeDType* const fromDtp = nodep->lhsp()->dtypep()->skipRefp();
-        UINFO(9, "  Bi-Eq/Neq expansion " << nodep << endl);
+        UINFO(9, "  Bi-Eq/Neq expansion " << nodep);
+
+        // Only expand if lhs is an unpacked array (we assume type checks already passed)
+        const AstNodeDType* const fromDtp = nodep->lhsp()->dtypep()->skipRefp();
         if (const AstUnpackArrayDType* const adtypep = VN_CAST(fromDtp, UnpackArrayDType)) {
             AstNodeBiop* logp = nullptr;
-            if (!VN_IS(nodep->lhsp()->dtypep()->skipRefp(), NodeArrayDType)) {
-                nodep->lhsp()->v3error(
-                    "Slice operator "
-                    << nodep->lhsp()->prettyTypeName()
-                    << " on non-slicable (e.g. non-vector) left-hand-side operand");
-            } else if (!VN_IS(nodep->rhsp()->dtypep()->skipRefp(), NodeArrayDType)) {
-                nodep->rhsp()->v3error(
-                    "Slice operator "
-                    << nodep->rhsp()->prettyTypeName()
-                    << " on non-slicable (e.g. non-vector) right-hand-side operand");
-            } else {
-                const int elements = adtypep->rangep()->elementsConst();
-                for (int elemIdx = 0; elemIdx < elements; ++elemIdx) {
-                    // EQ(a,b) -> LOGAND(EQ(ARRAYSEL(a,0), ARRAYSEL(b,0)), ...[1])
-                    AstNodeBiop* const clonep
-                        = VN_AS(nodep->cloneType(cloneAndSel(nodep->lhsp(), elements, elemIdx),
-                                                 cloneAndSel(nodep->rhsp(), elements, elemIdx)),
-                                NodeBiop);
-                    if (!logp) {
-                        logp = clonep;
-                    } else {
-                        switch (nodep->type()) {
-                        case VNType::atEq:  // FALLTHRU
-                        case VNType::atEqCase:
-                            logp = new AstLogAnd{nodep->fileline(), logp, clonep};
-                            break;
-                        case VNType::atNeq:  // FALLTHRU
-                        case VNType::atNeqCase:
-                            logp = new AstLogOr{nodep->fileline(), logp, clonep};
-                            break;
-                        default:
-                            nodep->v3fatalSrc("Unknown node type processing array slice");
-                            break;
-                        }
+
+            const int elements = adtypep->rangep()->elementsConst();
+            for (int elemIdx = 0; elemIdx < elements; ++elemIdx) {
+                // EQ(a,b) -> LOGAND(EQ(ARRAYSEL(a,0), ARRAYSEL(b,0)), ...[1])
+                // Original node is replaced, so it is safe to copy it one time even if it is
+                // impure.
+                T_NodeBiop* const clonep = new T_NodeBiop{
+                    nodep->fileline(), cloneAndSel(nodep->lhsp(), elements, elemIdx, elemIdx != 0),
+                    cloneAndSel(nodep->rhsp(), elements, elemIdx, elemIdx != 0)};
+                if (elemIdx == 0) {
+                    nodep->foreach([this](AstExprStmt* const exprp) {
+                        // Result expression is always evaluated to the same value, so the
+                        // statements can be removed once they were included in the expression
+                        // created for the 1st element.
+                        AstNodeExpr* const resultp = exprp->resultp()->unlinkFrBack();
+                        exprp->replaceWith(resultp);
+                        VL_DO_DANGLING(pushDeletep(exprp), exprp);
+                    });
+                }
+
+                if (!logp) {
+                    logp = clonep;
+                } else {
+                    switch (nodep->type()) {
+                    case VNType::Eq:  // FALLTHRU
+                    case VNType::EqCase:
+                        logp = new AstLogAnd{nodep->fileline(), logp, clonep};
+                        break;
+                    case VNType::Neq:  // FALLTHRU
+                    case VNType::NeqCase:
+                        logp = new AstLogOr{nodep->fileline(), logp, clonep};
+                        break;
+                    default: nodep->v3fatalSrc("Unknown node type processing array slice"); break;
                     }
                 }
-                UASSERT_OBJ(logp, nodep, "Unpacked array with empty indices range");
-                nodep->replaceWith(logp);
-                VL_DO_DANGLING(pushDeletep(nodep), nodep);
-                nodep = logp;
             }
+            UASSERT_OBJ(logp, nodep, "Unpacked array with empty indices range");
+            nodep->replaceWith(logp);
+            VL_DO_DANGLING(pushDeletep(nodep), nodep);
+            nodep = logp;
         }
+
         iterateChildren(nodep);
     }
+
     void visit(AstEq* nodep) override { expandBiOp(nodep); }
     void visit(AstNeq* nodep) override { expandBiOp(nodep); }
     void visit(AstEqCase* nodep) override { expandBiOp(nodep); }
@@ -360,6 +394,8 @@ public:
     explicit SliceVisitor(AstNetlist* nodep) { iterate(nodep); }
     ~SliceVisitor() override {
         V3Stats::addStat("Optimizations, Slice array assignments", m_statAssigns);
+        V3Stats::addStat("Optimizations, Slice array skips due to size limit",
+                         m_statSliceElementSkips);
     }
 };
 
@@ -367,7 +403,7 @@ public:
 // Link class functions
 
 void V3Slice::sliceAll(AstNetlist* nodep) {
-    UINFO(2, __FUNCTION__ << ": " << endl);
+    UINFO(2, __FUNCTION__ << ":");
     { SliceVisitor{nodep}; }  // Destruct before checking
     V3Global::dumpCheckGlobalTree("slice", 0, dumpTreeEitherLevel() >= 3);
 }

@@ -1,12 +1,12 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2018 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2018 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // issue2895
 
-module t (/*AUTOARG*/);
+module t;
 
    localparam string REG_X [0:31] = '{"zero", "ra", "sp", "gp", "tp", "t0",
                                       "t1", "t2", "s0/fp", "s1", "a0", "a1",

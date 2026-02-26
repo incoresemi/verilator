@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 package u_pkg;
@@ -28,6 +28,7 @@ package u_pkg;
    class u_callbacks #(type T=u_object, type CB=u_callback)
       extends u_typed_callbacks#(T);
       static function bit m_register_pair();
+         return 1'b0;
       endfunction
       static function void add(u_callback cb);
          u_queue#(u_callback) qr;

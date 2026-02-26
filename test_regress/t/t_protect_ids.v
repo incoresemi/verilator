@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2019 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 interface secret_intf();
@@ -10,9 +10,9 @@ interface secret_intf();
 endinterface
 
 module t (/*AUTOARG*/
-   // Inputs
-   clk
-   );
+  // Inputs
+  clk
+  );
    input clk;
 
    secret_sub secret_inst (.*);
@@ -30,7 +30,7 @@ module secret_sub
       integer secret_field_r;
    } secret_st;
 
-   integer   secret_cyc;
+   int       secret_cyc;
    real      secret_cyc_r;
    integer   secret_o;
    real      secret_r;
@@ -63,7 +63,7 @@ module secret_other
   (
    input clk);
 
-   integer secret_cyc;
+   int secret_cyc;
 
    always @ (posedge clk) begin
       secret_cyc <= secret_cyc + 1;

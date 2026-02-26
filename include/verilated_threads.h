@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2012-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2012-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=============================================================================
@@ -30,17 +30,18 @@
 #include <atomic>
 #include <condition_variable>
 #include <set>
+#include <stack>
 #include <thread>
 #include <vector>
 
-// clang-format off
-#if defined(__linux)
-# include <sched.h>  // For sched_getcpu()
+// Use pthreads directly on macOS (could do this on Linux too if needing APIs unavailable via C++)
+#if defined(_POSIX_THREADS) && defined(__APPLE__)
+#define VL_USE_PTHREADS
 #endif
-#if defined(__APPLE__) && !defined(__arm64__)
-# include <cpuid.h>  // For __cpuid_count()
+
+#ifdef VL_USE_PTHREADS
+#include <pthread.h>
 #endif
-// clang-format on
 
 class VlExecutionProfiler;
 class VlThreadPool;
@@ -125,7 +126,8 @@ public:
 };
 
 class VlWorkerThread final {
-private:
+    friend class VlThreadPool;
+
     // TYPES
     struct ExecRec final {
         VlExecFnp m_fnp = nullptr;  // Function to execute
@@ -150,8 +152,18 @@ private:
     std::vector<ExecRec> m_ready VL_GUARDED_BY(m_mutex);
     // Store the size atomically, so we can spin wait
     std::atomic<size_t> m_ready_size;
+    // Thread context
+    VerilatedContext* const m_contextp;
+    // Underlying thread record
+#ifdef VL_USE_PTHREADS
+    pthread_t m_pthread{};
+#else
+    std::thread m_cthread{};
+#endif
 
-    std::thread m_cthread;  // Underlying C++ thread record
+    // METHDOS
+    static void* start(void*);  // Static entry point, invokes 'main'
+    void main();  // 'main' loop of thread
 
     VL_UNCOPYABLE(VlWorkerThread);
 
@@ -196,14 +208,18 @@ public:
 
     void shutdown();  // Finish current tasks, then terminate thread
     void wait();  // Blocks calling thread until all tasks complete in this thread
-
-    void workerLoop();
-    static void startWorker(VlWorkerThread* workerp, VerilatedContext* contextp);
 };
 
 class VlThreadPool final : public VerilatedVirtualBase {
     // MEMBERS
     std::vector<VlWorkerThread*> m_workers;  // our workers
+
+    mutable VerilatedMutex m_mutex;  // Guards indexes of unassigned workers
+    // Indexes of unassigned workers
+    std::stack<size_t> m_unassignedWorkers VL_GUARDED_BY(m_mutex);
+    // For sequentially generating task IDs to avoid shadowing
+    std::atomic<unsigned> m_assignedTasks{0};
+    std::string m_numaStatus;  // Status of NUMA assignment
 
 public:
     // CONSTRUCTORS
@@ -214,7 +230,21 @@ public:
     ~VlThreadPool() override;
 
     // METHODS
+    size_t assignWorkerIndex() {
+        const VerilatedLockGuard lock{m_mutex};
+        assert(!m_unassignedWorkers.empty());
+        const size_t index = m_unassignedWorkers.top();
+        m_unassignedWorkers.pop();
+        return index;
+    }
+    void freeWorkerIndexes(std::vector<size_t>& indexes) {
+        const VerilatedLockGuard lock{m_mutex};
+        for (size_t index : indexes) m_unassignedWorkers.push(index);
+        indexes.clear();
+    }
+    unsigned assignTaskIndex() { return m_assignedTasks++; }
     int numThreads() const { return static_cast<int>(m_workers.size()); }
+    std::string numaStatus() const { return m_numaStatus; }
     VlWorkerThread* workerp(int index) {
         assert(index >= 0);
         assert(index < static_cast<int>(m_workers.size()));
@@ -223,6 +253,8 @@ public:
 
 private:
     VL_UNCOPYABLE(VlThreadPool);
+
+    std::string numaAssign(VerilatedContext* contextp);
 };
 
 #endif

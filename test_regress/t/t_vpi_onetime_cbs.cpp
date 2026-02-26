@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2021 by Wilson Snyder and Marlon James. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2021 Wilson Snyder and Marlon James
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -27,6 +27,7 @@
 
 #endif
 
+// These require the above. Comment prevents clang-format moving them
 #include "TestSimulator.h"
 #include "TestVpi.h"
 
@@ -54,22 +55,6 @@ bool verbose = true;
 bool verbose = false;
 #endif
 
-#define CHECK_RESULT_NZ(got) \
-    if (!(got)) { \
-        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", __FILE__, __LINE__); \
-        got_error = true; \
-        return __LINE__; \
-    }
-
-// Use cout to avoid issues with %d/%lx etc
-#define CHECK_RESULT(got, exp) \
-    if ((got) != (exp)) { \
-        std::cout << std::dec << "%Error: " << __FILE__ << ":" << __LINE__ << ": GOT = " << (got) \
-                  << "   EXP = " << (exp) << std::endl; \
-        got_error = true; \
-        return __LINE__; \
-    }
-
 #define STRINGIFY_CB_CASE(_cb) \
     case _cb: return #_cb
 
@@ -91,7 +76,7 @@ static const char* cb_reason_to_string(int cb_name) {
 bool cb_time_is_delay(int cb_name) {
     // For some callbacks, time is interpreted as a delay from current time
     // instead of an absolute time
-    if (cb_name == cbReadOnlySynch || cb_name == cbReadWriteSynch) { return true; }
+    if (cb_name == cbReadOnlySynch || cb_name == cbReadWriteSynch) return true;
     return false;
 }
 
@@ -153,7 +138,7 @@ static PLI_INT32 TheCallback(s_cb_data* data) {
         cb_data.cb_rtn = AtEndOfSimTimeCallback;
     } else {
         next_time = stats->exp_times[stats->count];
-        if (cb_time_is_delay(data->reason)) { next_time -= t.low; }
+        if (cb_time_is_delay(data->reason)) next_time -= t.low;
         cb_data.reason = data->reason;
         cb_data.cb_rtn = TheCallback;
     }
@@ -244,14 +229,14 @@ static int EndOfSimulationCallback(p_cb_data cb_data) {
     CHECK_RESULT(CallbackStats[cbAtEndOfSimTime].count, 8);
     CHECK_RESULT(CallbackStats[cbEndOfSimulation].count, 1);
 
-    if (!got_error) { printf("*-* All Finished *-*\n"); }
+    if (!got_error) printf("*-* All Finished *-*\n");
     return 0;
 }
 
 // cver entry
 static void VPIRegister(void) {
     // Clear stats
-    for (int cb = 1; cb <= cbAtEndOfSimTime; cb++) { CallbackStats[cb].count = 0; }
+    for (int cb = 1; cb <= cbAtEndOfSimTime; cb++) CallbackStats[cb].count = 0;
     CallbackStats[cbStartOfSimulation].exp_times = new PLI_UINT32(0);
     CallbackStats[cbEndOfSimulation].exp_times = new PLI_UINT32(22);
     s_cb_data cb_data;

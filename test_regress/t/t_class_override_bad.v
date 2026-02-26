@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2024 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2024 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 // Function names correspond to how the function is declared in the base class,
@@ -101,7 +101,7 @@ endclass
 class :final CClsBadExtendsFinal extends CClsF;
 endclass
 
-module t (/*AUTOARG*/);
+module t;
    initial begin
       Cls c;
       CClsF cc;

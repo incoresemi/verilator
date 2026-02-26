@@ -1,12 +1,13 @@
-%Error: t/t_interface_virtual_bad.v:31:12: Operator ASSIGN expected 'PBus' interface on Assign RHS but 'q8__Viftop' is a different interface ('QBus').
+%Error: t/t_interface_virtual_bad.v:31:12: Operator ASSIGN expected 'PBus' interface on Assign RHS but 'q8' is a different interface ('QBus').
                                          : ... note: In instance 't'
    31 |       v8 = q8;   
       |            ^~
+        ... See the manual at https://verilator.org/verilator_doc.html?v=latest for more assistance.
 %Error: t/t_interface_virtual_bad.v:35:12: Operator ASSIGN expected no interface modport on Assign RHS but got 'phy' modport.
                                          : ... note: In instance 't'
    35 |       v8 = v8_phy;   
       |            ^~~~~~
-%Error: t/t_interface_virtual_bad.v:37:17: Operator ASSIGN expected non-interface on Assign RHS but 'p8__Viftop' is an interface.
+%Error: t/t_interface_virtual_bad.v:37:17: Operator ASSIGN expected non-interface on Assign RHS but 'p8' is an interface.
                                          : ... note: In instance 't'
    37 |       data = p8.phy;   
       |                 ^~~
@@ -18,7 +19,7 @@
                                          : ... note: In instance 't'
    39 |       data = v8;   
       |              ^~
-%Error: t/t_interface_virtual_bad.v:40:14: Operator ASSIGN expected non-interface on Assign RHS but 'p8__Viftop' is an interface.
+%Error: t/t_interface_virtual_bad.v:40:14: Operator ASSIGN expected non-interface on Assign RHS but 'p8' is an interface.
                                          : ... note: In instance 't'
    40 |       data = p8;   
       |              ^~

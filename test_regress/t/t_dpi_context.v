@@ -1,9 +1,9 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Copyright 2009 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2009 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 module t ();
@@ -32,6 +32,7 @@ module sub (input integer inst);
    import "DPI-C" context function int dpic_save(int value);
    import "DPI-C" context function int dpic_restore();
    import "DPI-C" context function int unsigned dpic_getcontext();
+   import "DPI-C" context function int unsigned dpic_get1();
 
    int result;
 
@@ -63,6 +64,11 @@ module sub (input integer inst);
       if (dpic_restore() != 23+inst) $stop;
    endtask
 
+   function automatic int call_dpic_get1;
+      int res = dpic_get1();
+      return res;
+   endfunction
+
    int unsigned cntxt1;
    int unsigned cntxt2;
 
@@ -74,6 +80,7 @@ module sub (input integer inst);
      end
      // svContext should be the context of the function declaration, not the context of the function call
      if (cntxt1 != cntxt2) $stop;
+     if (call_dpic_get1() != 1) $stop;
    end
 
 endmodule

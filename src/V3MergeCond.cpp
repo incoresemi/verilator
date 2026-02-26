@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -95,11 +95,11 @@ namespace {
 // if there is one and it is in a supported position, which are:
 // - RHS is the Cond
 // - RHS is And(Const, Cond). This And is inserted often by V3Clean.
-AstNodeCond* extractCondFromRhs(AstNode* rhsp) {
-    if (AstNodeCond* const condp = VN_CAST(rhsp, NodeCond)) {
+AstCond* extractCondFromRhs(AstNode* rhsp) {
+    if (AstCond* const condp = VN_CAST(rhsp, Cond)) {
         return condp;
     } else if (const AstAnd* const andp = VN_CAST(rhsp, And)) {
-        if (AstNodeCond* const condp = VN_CAST(andp->rhsp(), NodeCond)) {
+        if (AstCond* const condp = VN_CAST(andp->rhsp(), Cond)) {
             if (VN_IS(andp->lhsp(), Const)) return condp;
         }
     }
@@ -177,7 +177,7 @@ class CodeMotionAnalysisVisitor final : public VNVisitorConst {
     static AstNodeExpr* extractCondition(const AstNodeStmt* nodep) {
         AstNodeExpr* conditionp = nullptr;
         if (const AstNodeAssign* const assignp = VN_CAST(nodep, NodeAssign)) {
-            if (AstNodeCond* const conditionalp = extractCondFromRhs(assignp->rhsp())) {
+            if (AstCond* const conditionalp = extractCondFromRhs(assignp->rhsp())) {
                 conditionp = conditionalp->condp();
             }
         } else if (const AstNodeIf* const ifp = VN_CAST(nodep, NodeIf)) {
@@ -245,8 +245,8 @@ class CodeMotionAnalysisVisitor final : public VNVisitorConst {
     }
 
     void analyzeNode(AstNode* nodep) {
-        // If an impure node under a statement, mark that statement as impure
-        if (m_propsp && !nodep->isPure()) m_propsp->m_isFence = true;
+        // If impure, or branch, mark statement as fence
+        if (m_propsp && (!nodep->isPure() || nodep->isBrancher())) m_propsp->m_isFence = true;
         // Analyze children
         iterateChildrenConst(nodep);
     }
@@ -276,7 +276,7 @@ class CodeMotionAnalysisVisitor final : public VNVisitorConst {
 
     // CONSTRUCTOR
     CodeMotionAnalysisVisitor(AstNode* nodep, StmtPropertiesAllocator& stmtProperties)
-        : m_stmtProperties(stmtProperties) {
+        : m_stmtProperties{stmtProperties} {
         iterateAndNextConstNull(nodep);
     }
 
@@ -399,7 +399,7 @@ class CodeMotionOptimizeVisitor final : public VNVisitor {
 
     // CONSTRUCTOR
     CodeMotionOptimizeVisitor(AstNode* nodep, const StmtPropertiesAllocator& stmtProperties)
-        : m_stmtProperties(stmtProperties) {
+        : m_stmtProperties{stmtProperties} {
         // We assert the given node is at the head of the list otherwise we might move a node
         // before the given node. This is easy to fix in the above iteration with a check on a
         // boundary node we should not move past, if we ever need to do so.
@@ -564,7 +564,7 @@ class MergeCondVisitor final : public VNVisitor {
                 return yieldsOneOrZero(biopp->lhsp()) && yieldsOneOrZero(biopp->rhsp());
             return false;
         }
-        if (const AstNodeCond* const condp = VN_CAST(nodep, NodeCond)) {
+        if (const AstCond* const condp = VN_CAST(nodep, Cond)) {
             return yieldsOneOrZero(condp->thenp()) && yieldsOneOrZero(condp->elsep());
         }
         if (const AstCCast* const castp = VN_CAST(nodep, CCast)) {
@@ -591,7 +591,7 @@ class MergeCondVisitor final : public VNVisitor {
     AstNodeExpr* foldAndUnlink(AstNodeExpr* rhsp, bool condTrue) {
         if (rhsp->sameTree(m_mgCondp)) {
             return new AstConst{rhsp->fileline(), AstConst::BitTrue{}, condTrue};
-        } else if (const AstNodeCond* const condp = extractCondFromRhs(rhsp)) {
+        } else if (const AstCond* const condp = extractCondFromRhs(rhsp)) {
             AstNodeExpr* const resp
                 = condTrue ? condp->thenp()->unlinkFrBack() : condp->elsep()->unlinkFrBack();
             if (condp == rhsp) return resp;
@@ -645,7 +645,7 @@ class MergeCondVisitor final : public VNVisitor {
         AstNodeIf* recursivep = nullptr;
         // Merge if list is longer than one node
         if (m_mgFirstp != m_mgLastp) {
-            UINFO(6, "MergeCond - First: " << m_mgFirstp << " Last: " << m_mgLastp << endl);
+            UINFO(6, "MergeCond - First: " << m_mgFirstp << " Last: " << m_mgLastp);
             ++m_statMerges;
             if (m_listLenght > m_statLongestList) m_statLongestList = m_listLenght;
 
@@ -655,6 +655,9 @@ class MergeCondVisitor final : public VNVisitor {
             // Create equivalent 'if' statement and insert it before the first node
             AstIf* const resultp = new AstIf{m_mgCondp->fileline(), m_mgCondp};
             m_mgFirstp->addHereThisAsNext(resultp);
+            // Try to preserve branch prediction if we can
+            size_t nLikely = 0;
+            size_t nUnlikely = 0;
             // Unzip the list and insert under branches
             AstNode* nextp = m_mgFirstp;
             do {
@@ -691,10 +694,16 @@ class MergeCondVisitor final : public VNVisitor {
                     if (AstNode* const listp = ifp->elsesp()) {
                         resultp->addElsesp(listp->unlinkFrBackWithNext());
                     }
+                    // Record branch prediction
+                    if (ifp->branchPred().likely()) ++nLikely;
+                    if (ifp->branchPred().unlikely()) ++nUnlikely;
                     // Cleanup
                     VL_DO_DANGLING(ifp->deleteTree(), ifp);
                 }
             } while (nextp);
+            // If prediction is unanimous, assign it to the merged AstIf
+            if (nLikely && !nUnlikely) resultp->branchPred(VBranchPred::BP_LIKELY);
+            if (!nLikely && nUnlikely) resultp->branchPred(VBranchPred::BP_UNLIKELY);
             // Merge the branches of the resulting AstIf after re-analysis
             if (resultp->thensp()) m_workQueuep->push(resultp->thensp());
             if (resultp->elsesp()) m_workQueuep->push(resultp->elsesp());
@@ -886,7 +895,7 @@ public:
 // MergeConditionals class functions
 
 void V3MergeCond::mergeAll(AstNetlist* nodep) {
-    UINFO(2, __FUNCTION__ << ": " << endl);
+    UINFO(2, __FUNCTION__ << ":");
     { MergeCondVisitor{nodep}; }
     V3Global::dumpCheckGlobalTree("merge_cond", 0, dumpTreeEitherLevel() >= 6);
 }

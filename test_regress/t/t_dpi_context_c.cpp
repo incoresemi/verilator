@@ -1,10 +1,10 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2009-2009 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2009-2009 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -42,6 +42,7 @@ extern int dpic_line();
 extern int dpic_save(int value);
 extern int dpic_restore();
 extern unsigned dpic_getcontext();
+extern unsigned dpic_get1();
 }
 #endif
 
@@ -150,6 +151,8 @@ unsigned dpic_getcontext() {
            scope, svGetNameFromScope(scope));
     return (unsigned)(uintptr_t)scope;
 }
+
+unsigned dpic_get1() { return 1; }
 
 void dpic_final() {
     static int s_once = 0;

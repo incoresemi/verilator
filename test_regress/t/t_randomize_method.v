@@ -1,13 +1,13 @@
 // DESCRIPTION: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define check_rand(cl, field) \
 begin \
-   longint prev_result; \
-   int ok = 0; \
+   automatic longint prev_result; \
+   automatic int ok; \
    void'(cl.randomize()); \
    prev_result = longint'(field); \
    repeat(9) begin \
@@ -155,7 +155,7 @@ class ClsContainUsedOnlyHere;
    endfunction
 endclass
 
-module t (/*AUTOARG*/);
+module t;
 
    DerivedCls1 derived1;
    DerivedCls2 derived2;

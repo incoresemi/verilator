@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2008 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2008 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define STRINGIFY(x) `"x`"
@@ -11,7 +11,7 @@ module t;
    integer count, a;
 
    initial begin
-      infile = $fopen("t/t_sys_file_scan_input.dat", "r");
+      infile = $fopen("t/t_sys_file_scan.dat", "r");
       outfile = $fopen({`STRINGIFY(`TEST_OBJ_DIR),"/t_sys_file_scan_test.log"}, "w");
 
       count = 1234;

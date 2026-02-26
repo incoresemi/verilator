@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2009 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2009 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 typedef enum logic [4:0]
@@ -11,7 +11,7 @@ typedef enum logic [4:0]
       BIT2 = 5'd2
       } three_t;
 
-module t (/*AUTOARG*/);
+module t;
 
    localparam FIVE = 5;
 
@@ -46,6 +46,10 @@ module t (/*AUTOARG*/);
 
    var enum logic [3:0]  { QINVALID='1, QSEND={2'b0,2'h0}, QOP={2'b0,2'h1}, QCL={2'b0,2'h2},
                            QPR={2'b0,2'h3 }, QACK, QRSP } inv;
+
+   enum logic [7:0] {
+     ENARRAY = 6
+   } [3:2] enarray;
 
    initial begin
       if (e0 !== 0) $stop;
@@ -85,6 +89,11 @@ module t (/*AUTOARG*/);
 
       if ($size(array5) != 5) $stop;
       if ($size(array5i) != 5) $stop;
+
+      enarray[2] = ENARRAY;
+      enarray[3] = ENARRAY;
+      if (enarray[2] !== ENARRAY) $stop;
+      if (enarray[3] !== ENARRAY) $stop;
 
       $write("*-* All Finished *-*\n");
       $finish;

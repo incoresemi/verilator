@@ -3,10 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=========================================================================
@@ -116,7 +116,7 @@ IData VL_DIST_ERLANG(IData& seedr, IData uk, IData umean) VL_MT_SAFE {
         return 0;
     }
     double x = 1.0;
-    for (int32_t i = 1; i <= k; i++) x = x * _vl_dbase_uniform(seedr, 0, 1);
+    for (int32_t i = 1; i <= k; ++i) x = x * _vl_dbase_uniform(seedr, 0, 1);
     const double a = static_cast<double>(mean);
     const double b = static_cast<double>(k);
     double r = -a * log(x) / b;

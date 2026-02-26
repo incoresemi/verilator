@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 
@@ -27,7 +27,7 @@ import A::*;
 //    AB_t AB[10]; // "struct{bit A;bit B;}top.AB_t$[0:9]"
 // endmodule
 
-module t(/*AUTOARG*/);
+module t;
 
    real r;
    logic l;

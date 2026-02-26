@@ -1,9 +1,9 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Copyright 2011 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2011 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 `define stop $stop
@@ -166,9 +166,11 @@ module t (/*AUTOARG*/
       `checks(s, "-inf");
       r = $sqrt(-1.0);  // NaN
       s = $sformatf("%g", r);
-      `checks(s, "-nan");
+      if (s == "-nan") s = "nan";
+      `checks(s, "nan");
       r = -$sqrt(-1.0);  // NaN
       s = $sformatf("%g", r);
+      if (s == "-nan") s = "nan";
       `checks(s, "nan");
 
       if (real'(TWENTY) != 20.0) $stop;

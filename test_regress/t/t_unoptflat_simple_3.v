@@ -3,8 +3,8 @@
 // Demonstration of an UNOPTFLAT combinatorial loop using 3 bits and looping
 // through 2 sub-modules.
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2013 by Jeremy Bennett.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2013 Jeremy Bennett
 // SPDX-License-Identifier: CC0-1.0
 
 module t (/*AUTOARG*/
@@ -14,10 +14,6 @@ module t (/*AUTOARG*/
    input clk;
 
    wire [2:0] x;
-
-   initial begin
-      x = 3'b000;
-   end
 
    test1 test1i ( .clk     (clk),
                   .xvecin  (x[1:0]),

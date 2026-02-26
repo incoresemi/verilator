@@ -3,9 +3,10 @@
 //
 // Code available from: https://verilator.org
 //
-// Copyright 2024 by Wilson Snyder.  This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU Lesser
-// General Public License Version 3 or the Perl Artistic License Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2001-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //=========================================================================
@@ -22,6 +23,7 @@
 
 #include "verilated_random.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -45,7 +47,7 @@
 #endif
 // clang-format on
 
-class Process final : private std::streambuf, public std::iostream {
+class VlRProcess final : private std::streambuf, public std::iostream {
     static constexpr int BUFFER_SIZE = 4096;
     const char* const* m_cmd = nullptr;  // fork() process argv
 #ifdef _VL_SOLVER_PIPE
@@ -69,6 +71,7 @@ protected:
         if (pbase() == pptr()) return 0;
         size_t size = pptr() - pbase();
         ssize_t n = ::write(m_writeFd, pbase(), size);
+        // VL_PRINTF_MT("solver-write '%s'\n", std::string(pbase(), size).c_str());
         if (n == -1) perror("write");
         if (n <= 0) {
             wait_report();
@@ -98,7 +101,7 @@ protected:
     }
 
 public:
-    explicit Process(const char* const* const cmd = nullptr)
+    explicit VlRProcess(const char* const* const cmd = nullptr)
         : std::streambuf{}
         , std::iostream{this}
         , m_cmd{cmd} {
@@ -112,7 +115,7 @@ public:
         if (m_pidStatus) {
             std::stringstream msg;
             msg << "Subprocess command `" << m_cmd[0];
-            for (const char* const* arg = m_cmd + 1; *arg; arg++) msg << ' ' << *arg;
+            for (const char* const* arg = m_cmd + 1; *arg; ++arg) msg << ' ' << *arg;
             msg << "' failed: ";
             if (WIFSIGNALED(m_pidStatus))
                 msg << strsignal(WTERMSIG(m_pidStatus))
@@ -120,7 +123,7 @@ public:
             else if (WIFEXITED(m_pidStatus))
                 msg << "exit status " << WEXITSTATUS(m_pidStatus);
             const std::string str = msg.str();
-            VL_WARN_MT("", 0, "Process", str.c_str());
+            VL_WARN_MT("", 0, "VlRProcess", str.c_str());
         }
 #endif
         m_pidExited = true;
@@ -151,11 +154,11 @@ public:
         constexpr int P_WR = 1;
 
         if (pipe(fd_stdin) != 0) {
-            perror("Process::open: pipe");
+            perror("VlRProcess::open: pipe");
             return false;
         }
         if (pipe(fd_stdout) != 0) {
-            perror("Process::open: pipe");
+            perror("VlRProcess::open: pipe");
             close(fd_stdin[P_RD]);
             close(fd_stdin[P_WR]);
             return false;
@@ -175,7 +178,7 @@ public:
 
         const pid_t pid = fork();
         if (pid < 0) {
-            perror("Process::open: fork");
+            perror("VlRProcess::open: fork");
             close(fd_stdin[P_RD]);
             close(fd_stdin[P_WR]);
             close(fd_stdout[P_RD]);
@@ -190,7 +193,7 @@ public:
             dup2(fd_stdout[P_WR], STDOUT_FILENO);
             execvp(cmd[0], const_cast<char* const*>(cmd));
             std::stringstream msg;
-            msg << "Process::open: execvp(" << cmd[0] << ")";
+            msg << "VlRProcess::open: execvp(" << cmd[0] << ")";
             const std::string str = msg.str();
             perror(str.c_str());
             _exit(127);
@@ -212,8 +215,8 @@ public:
     }
 };
 
-static Process& getSolver() {
-    static Process s_solver;
+static VlRProcess& getSolver() {
+    static VlRProcess s_solver;
     static bool s_done = false;
     if (s_done) return s_solver;
     s_done = true;
@@ -221,7 +224,7 @@ static Process& getSolver() {
     static std::vector<const char*> s_argv;
     static std::string s_program = Verilated::threadContextp()->solverProgram();
     s_argv.emplace_back(&s_program[0]);
-    for (char* arg = &s_program[0]; *arg; arg++) {
+    for (char* arg = &s_program[0]; *arg; ++arg) {
         if (*arg == ' ') {
             *arg = '\0';
             s_argv.emplace_back(arg + 1);
@@ -242,7 +245,7 @@ static Process& getSolver() {
     msg << "Unable to communicate with SAT solver, please check its installation or specify a "
            "different one in VERILATOR_SOLVER environment variable.\n";
     msg << " ... Tried: $";
-    for (const char* const* arg = cmd; *arg; arg++) msg << ' ' << *arg;
+    for (const char* const* arg = cmd; *arg; ++arg) msg << ' ' << *arg;
     msg << '\n';
     const std::string str = msg.str();
     VL_WARN_MT("", 0, "randomize", str.c_str());
@@ -251,7 +254,7 @@ static Process& getSolver() {
     return s_solver;
 }
 
-std::string readUntilBalanced(std::istream& stream) {
+static std::string readUntilBalanced(std::istream& stream) {
     std::string result;
     std::string token;
     int parenCount = 1;
@@ -269,8 +272,8 @@ std::string readUntilBalanced(std::istream& stream) {
     return result;
 }
 
-std::string parseNestedSelect(const std::string& nested_select_expr,
-                              std::vector<std::string>& indices) {
+static std::string parseNestedSelect(const std::string& nested_select_expr,
+                                     std::vector<std::string>& indices) {
     std::istringstream nestedStream(nested_select_expr);
     std::string name, idx;
     nestedStream >> name;
@@ -282,6 +285,7 @@ std::string parseNestedSelect(const std::string& nested_select_expr,
     indices.push_back(idx);
     return name;
 }
+
 //======================================================================
 // VlRandomizer:: Methods
 
@@ -293,7 +297,7 @@ void VlRandomVar::emitType(std::ostream& s) const { s << "(_ BitVec " << width()
 int VlRandomVar::totalWidth() const { return m_width; }
 static bool parseSMTNum(int obits, WDataOutP owp, const std::string& val) {
     int i;
-    for (i = 0; val[i] && val[i] != '#'; i++) {}
+    for (i = 0; val[i] && val[i] != '#'; ++i) {}
     if (val[i++] != '#') return false;
     switch (val[i++]) {
     case 'b': _vl_vsss_based(owp, obits, 1, &val[i], 0, val.size() - i); break;
@@ -344,7 +348,7 @@ void VlRandomizer::randomConstraint(std::ostream& os, VlRNG& rngr, int bits) {
     os << "(= #b";
     for (int i = bits - 1; i >= 0; i--) os << (VL_BITISSET_I(hash, i) ? '1' : '0');
     if (bits > 1) os << " (concat";
-    for (int i = 0; i < bits; i++) {
+    for (int i = 0; i < bits; ++i) {
         IData varBitsLeft = varBits;
         IData varBitsWant = (varBits + 1) / 2;
         if (varBits > 2) os << " (bvxor";
@@ -364,51 +368,252 @@ void VlRandomizer::randomConstraint(std::ostream& os, VlRNG& rngr, int bits) {
     os << ')';
 }
 
-bool VlRandomizer::next(VlRNG& rngr) {
-    if (m_vars.empty()) return true;
-    std::iostream& f = getSolver();
-    if (!f) return false;
+size_t VlRandomizer::hashConstraints() const {
+    size_t h = 0;
+    for (const auto& c : m_constraints) {
+        h ^= std::hash<std::string>{}(c) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    }
+    return h;
+}
 
-    f << "(set-option :produce-models true)\n";
-    f << "(set-logic QF_ABV)\n";
-    f << "(define-fun __Vbv ((b Bool)) (_ BitVec 1) (ite b #b1 #b0))\n";
-    f << "(define-fun __Vbool ((v (_ BitVec 1))) Bool (= #b1 v))\n";
+void VlRandomizer::enumerateRandcValues(const std::string& varName, VlRNG& rngr) {
+    std::vector<uint64_t> values;
+    const auto varIt = m_vars.find(varName);
+    if (varIt == m_vars.end()) return;
+    const int width = varIt->second->width();
+
+    std::iostream& os = getSolver();
+    if (!os) return;
+
+    // Set up a single incremental solver session for enumeration
+    os << "(set-option :produce-models true)\n";
+    os << "(set-logic QF_ABV)\n";
+    os << "(define-fun __Vbv ((b Bool)) (_ BitVec 1) (ite b #b1 #b0))\n";
+    os << "(define-fun __Vbool ((v (_ BitVec 1))) Bool (= #b1 v))\n";
+
+    // Declare all variables (solver needs full context for cross-var constraints)
     for (const auto& var : m_vars) {
         if (var.second->dimension() > 0) {
             auto arrVarsp = std::make_shared<const ArrayInfoMap>(m_arr_vars);
             var.second->setArrayInfo(arrVarsp);
         }
-        f << "(declare-fun " << var.first << " () ";
-        var.second->emitType(f);
-        f << ")\n";
+        os << "(declare-fun " << var.first << " () ";
+        var.second->emitType(os);
+        os << ")\n";
     }
-    for (const std::string& constraint : m_constraints) {
-        f << "(assert (= #b1 " << constraint << "))\n";
-    }
-    f << "(check-sat)\n";
 
-    bool sat = parseSolution(f);
+    // Assert all user constraints
+    for (const std::string& constraint : m_constraints) {
+        os << "(assert (= #b1 " << constraint << "))\n";
+    }
+
+    // Incrementally enumerate all valid values for this randc variable
+    while (true) {
+        os << "(check-sat)\n";
+        std::string sat;
+        do { std::getline(os, sat); } while (sat.empty());
+        if (sat != "sat") break;
+
+        // Read just this variable's value
+        os << "(get-value (" << varName << "))\n";
+        char c;
+        os >> c;  // '('
+        os >> c;  // '('
+        std::string name, value;
+        os >> name;  // Consume variable name token from solver output
+        (void)name;
+        std::getline(os, value, ')');
+        os >> c;  // ')'
+
+        // Parse the SMT value to uint64_t
+        VlWide<VL_WQ_WORDS_E> qowp;
+        VL_SET_WQ(qowp, 0ULL);
+        if (!parseSMTNum(width, qowp, value)) break;
+        const uint64_t numVal = (width <= 32) ? qowp[0] : VL_SET_QW(qowp);
+
+        values.push_back(numVal);
+
+        // Exclude this value for next iteration (incremental)
+        os << "(assert (not (= " << varName << " (_ bv" << numVal << " " << width << "))))\n";
+    }
+
+    os << "(reset)\n";
+
+    // Shuffle using Fisher-Yates
+    for (size_t i = values.size(); i > 1; --i) {
+        const size_t j = VL_RANDOM_RNG_I(rngr) % i;
+        std::swap(values[i - 1], values[j]);
+    }
+
+    m_randcValueQueues[varName] = std::deque<uint64_t>(values.begin(), values.end());
+}
+
+bool VlRandomizer::next(VlRNG& rngr) {
+    if (m_vars.empty() && m_unique_arrays.empty()) return true;
+    for (const std::string& baseName : m_unique_arrays) {
+        const auto it = m_vars.find(baseName);
+        const uint32_t size = m_unique_array_sizes.at(baseName);
+
+        if (it != m_vars.end()) {
+            std::string distinctExpr = "(__Vbv (distinct";
+            for (uint32_t i = 0; i < size; ++i) {
+                char hexIdx[12];
+                sprintf(hexIdx, "#x%08x", i);
+                distinctExpr += " (select " + it->first + " " + hexIdx + ")";
+            }
+            distinctExpr += "))";
+            m_constraints.push_back(distinctExpr);
+        }
+    }
+
+    // Randc queue-based cycling: enumerate valid values once, then pop per call
+    if (!m_randcVarNames.empty()) {
+        const size_t currentHash = hashConstraints();
+        // Invalidate queues if constraints changed (e.g., constraint_mode toggled)
+        if (currentHash != m_randcConstraintHash) {
+            m_randcValueQueues.clear();
+            m_randcConstraintHash = currentHash;
+        }
+        // Refill empty queues (start of new cycle)
+        for (const auto& name : m_randcVarNames) {
+            auto& queue = m_randcValueQueues[name];
+            if (queue.empty()) enumerateRandcValues(name, rngr);
+        }
+    }
+
+    // Pop randc values from queues (will be pinned in solver)
+    std::map<std::string, uint64_t> randcPinned;
+    for (const auto& name : m_randcVarNames) {
+        auto& queue = m_randcValueQueues[name];
+        if (queue.empty()) return false;  // No valid values exist
+        randcPinned[name] = queue.front();
+        queue.pop_front();
+    }
+
+    std::iostream& os = getSolver();
+    if (!os) return false;
+
+    os << "(set-option :produce-models true)\n";
+    os << "(set-logic QF_ABV)\n";
+    os << "(define-fun __Vbv ((b Bool)) (_ BitVec 1) (ite b #b1 #b0))\n";
+    os << "(define-fun __Vbool ((v (_ BitVec 1))) Bool (= #b1 v))\n";
+    for (const auto& var : m_vars) {
+        if (var.second->dimension() > 0) {
+            auto arrVarsp = std::make_shared<const ArrayInfoMap>(m_arr_vars);
+            var.second->setArrayInfo(arrVarsp);
+        }
+        os << "(declare-fun " << var.first << " () ";
+        var.second->emitType(os);
+        os << ")\n";
+    }
+
+    for (const std::string& constraint : m_constraints) {
+        os << "(assert (= #b1 " << constraint << "))\n";
+    }
+
+    // Pin randc values from pre-enumerated queues
+    for (const auto& pair : randcPinned) {
+        const int w = m_vars.at(pair.first)->width();
+        os << "(assert (= " << pair.first << " (_ bv" << pair.second << " " << w << ")))\n";
+    }
+
+    os << "(check-sat)\n";
+
+    bool sat = parseSolution(os, true);
     if (!sat) {
-        f << "(reset)\n";
+        // If unsat, use named assertions to get unsat-core
+        os << "(reset)\n";
+        os << "(set-option :produce-unsat-cores true)\n";
+        os << "(set-logic QF_ABV)\n";
+        os << "(define-fun __Vbv ((b Bool)) (_ BitVec 1) (ite b #b1 #b0))\n";
+        os << "(define-fun __Vbool ((v (_ BitVec 1))) Bool (= #b1 v))\n";
+        for (const auto& var : m_vars) {
+            if (var.second->dimension() > 0) {
+                auto arrVarsp = std::make_shared<const ArrayInfoMap>(m_arr_vars);
+                var.second->setArrayInfo(arrVarsp);
+            }
+            os << "(declare-fun " << var.first << " () ";
+            var.second->emitType(os);
+            os << ")\n";
+        }
+        int j = 0;
+        for (const std::string& constraint : m_constraints) {
+            os << "(assert (! (= #b1 " << constraint << ") :named cons" << j << "))\n";
+            j++;
+        }
+        os << "(check-sat)\n";
+        sat = parseSolution(os, true);
+        (void)sat;
+        os << "(reset)\n";
         return false;
     }
-    for (int i = 0; i < _VL_SOLVER_HASH_LEN_TOTAL && sat; i++) {
-        f << "(assert ";
-        randomConstraint(f, rngr, _VL_SOLVER_HASH_LEN);
-        f << ")\n";
-        f << "\n(check-sat)\n";
-        sat = parseSolution(f);
+    for (int i = 0; i < _VL_SOLVER_HASH_LEN_TOTAL && sat; ++i) {
+        os << "(assert ";
+        randomConstraint(os, rngr, _VL_SOLVER_HASH_LEN);
+        os << ")\n";
+        os << "\n(check-sat)\n";
+        sat = parseSolution(os, false);
+        (void)sat;
     }
 
-    f << "(reset)\n";
+    os << "(reset)\n";
     return true;
 }
 
-bool VlRandomizer::parseSolution(std::iostream& f) {
+bool VlRandomizer::parseSolution(std::iostream& os, bool log) {
     std::string sat;
-    do { std::getline(f, sat); } while (sat == "");
-
-    if (sat == "unsat") return false;
+    do { std::getline(os, sat); } while (sat == "");
+    if (sat == "unsat") {
+        if (!log) return false;
+        os << "(get-unsat-core) \n";
+        sat.clear();
+        std::getline(os, sat);
+        std::vector<int> numbers;
+        std::string currentNum;
+        for (char c : sat) {
+            if (std::isdigit(c)) {
+                currentNum += c;
+                numbers.push_back(std::stoi(currentNum));
+                currentNum.clear();
+            }
+        }
+        if (Verilated::threadContextp()->warnUnsatConstr()) {
+            for (int n : numbers) {
+                if (n < m_constraints_line.size()) {
+                    const std::string& constraint_info = m_constraints_line[n];
+                    // Parse "filename:linenum   source" format
+                    size_t colon_pos = constraint_info.find(':');
+                    if (colon_pos != std::string::npos) {
+                        std::string filename = constraint_info.substr(0, colon_pos);
+                        size_t space_pos = constraint_info.find("   ", colon_pos);
+                        std::string linenum_str;
+                        std::string source;
+                        if (space_pos != std::string::npos) {
+                            linenum_str
+                                = constraint_info.substr(colon_pos + 1, space_pos - colon_pos - 1);
+                            source = constraint_info.substr(space_pos + 3);
+                        } else {
+                            linenum_str = constraint_info.substr(colon_pos + 1);
+                        }
+                        const int linenum = std::stoi(linenum_str);
+                        std::string msg = "UNSATCONSTR: Unsatisfied constraint";
+                        if (!source.empty()) {
+                            // Trim leading whitespace and add quotes
+                            size_t start = source.find_first_not_of(" \t");
+                            if (start != std::string::npos) {
+                                msg += ": '" + source.substr(start) + "'";
+                            }
+                        }
+                        VL_WARN_MT(filename.c_str(), linenum, "", msg.c_str());
+                    } else {
+                        VL_PRINTF("%%Warning-UNSATCONSTR: Unsatisfied constraint: %s\n",
+                                  constraint_info.c_str());
+                    }
+                }
+            }
+        }
+        return false;
+    }
     if (sat != "sat") {
         std::stringstream msg;
         msg << "Internal: Solver error: " << sat;
@@ -417,25 +622,25 @@ bool VlRandomizer::parseSolution(std::iostream& f) {
         return false;
     }
 
-    f << "(get-value (";
+    os << "(get-value (";
     for (const auto& var : m_vars) {
         if (var.second->dimension() > 0) {
             auto arrVarsp = std::make_shared<const ArrayInfoMap>(m_arr_vars);
             var.second->setArrayInfo(arrVarsp);
         }
-        var.second->emitGetValue(f);
+        var.second->emitGetValue(os);
     }
-    f << "))\n";
+    os << "))\n";
     // Quasi-parse S-expression of the form ((x #xVALUE) (y #bVALUE) (z #xVALUE))
     char c;
-    f >> c;
+    os >> c;
     if (c != '(') {
         VL_WARN_MT(__FILE__, __LINE__, "randomize",
                    "Internal: Unable to parse solver's response: invalid S-expression");
         return false;
     }
     while (true) {
-        f >> c;
+        os >> c;
         if (c == ')') break;
         if (c != '(') {
             VL_WARN_MT(__FILE__, __LINE__, "randomize",
@@ -444,18 +649,18 @@ bool VlRandomizer::parseSolution(std::iostream& f) {
         }
         std::string name, idx, value;
         std::vector<std::string> indices;
-        f >> name;
+        os >> name;
         indices.clear();
         if (name == "(select") {
-            const std::string selectExpr = readUntilBalanced(f);
+            const std::string selectExpr = readUntilBalanced(os);
             name = parseNestedSelect(selectExpr, indices);
         }
-        std::getline(f, value, ')');
+        std::getline(os, value, ')');
         const auto it = m_vars.find(name);
         if (it == m_vars.end()) continue;
         const VlRandomVar& varr = *it->second;
-        if (m_randmode && !varr.randModeIdxNone()) {
-            if (!(m_randmode->at(varr.randModeIdx()))) continue;
+        if (m_randmodep && !varr.randModeIdxNone()) {
+            if (!m_randmodep->at(varr.randModeIdx())) continue;
         }
         if (!indices.empty()) {
             std::ostringstream oss;
@@ -464,24 +669,34 @@ bool VlRandomizer::parseSolution(std::iostream& f) {
                 const size_t start = hex_index.find_first_not_of(" ");
                 if (start == std::string::npos || hex_index.substr(start, 2) != "#x") {
                     VL_FATAL_MT(__FILE__, __LINE__, "randomize",
-                                "Error: hex_index contains invalid format");
+                                "hex_index contains invalid format");
                     continue;
                 }
-                const int index = std::stoi(hex_index.substr(start + 2), nullptr, 16);
-                oss << "[" << index << "]";
+                std::string trimmed_hex = hex_index.substr(start + 2);
+
+                if (trimmed_hex.size() <= 8) {  // Small numbers: <= 32 bits
+                    // Convert to decimal and output directly
+                    oss << "[" << std::to_string(std::stoll(trimmed_hex, nullptr, 16)) << "]";
+                } else {  // Large numbers: > 32 bits
+                    // Trim leading zeros and handle empty case
+                    trimmed_hex.erase(0, trimmed_hex.find_first_not_of('0'));
+                    oss << "[" << (trimmed_hex.empty() ? "0" : trimmed_hex) << "]";
+                }
             }
             const std::string indexed_name = oss.str();
-            const auto it = std::find_if(m_arr_vars.begin(), m_arr_vars.end(),
-                                         [&indexed_name](const auto& entry) {
-                                             return entry.second->m_name == indexed_name;
-                                         });
-            if (it != m_arr_vars.end()) {
+
+            const auto iti = std::find_if(m_arr_vars.begin(), m_arr_vars.end(),
+                                          [&indexed_name](const auto& entry) {
+                                              return entry.second->m_name == indexed_name;
+                                          });
+            if (iti != m_arr_vars.end()) {
                 std::ostringstream ss;
-                ss << "#x" << std::hex << std::setw(8) << std::setfill('0') << it->second->m_index;
+                ss << "#x" << std::hex << std::setw(8) << std::setfill('0')
+                   << iti->second->m_index;
                 idx = ss.str();
             } else {
                 VL_FATAL_MT(__FILE__, __LINE__, "randomize",
-                            "Error: indexed_name not found in m_arr_vars");
+                            "indexed_name not found in m_arr_vars");
             }
         }
         varr.set(idx, value);
@@ -489,16 +704,42 @@ bool VlRandomizer::parseSolution(std::iostream& f) {
     return true;
 }
 
-void VlRandomizer::hard(std::string&& constraint) {
+void VlRandomizer::hard(std::string&& constraint, const char* filename, uint32_t linenum,
+                        const char* source) {
     m_constraints.emplace_back(std::move(constraint));
+    // Format constraint location: "filename:linenum   source"
+    if (filename[0] != '\0' || source[0] != '\0') {
+        std::string line;
+        if (filename[0] != '\0') {
+            line = std::string(filename) + ":" + std::to_string(linenum);
+            if (source[0] != '\0') line += "   " + std::string(source);
+        } else {
+            line = source;
+        }
+        m_constraints_line.emplace_back(std::move(line));
+    }
 }
 
-void VlRandomizer::clear() { m_constraints.clear(); }
+void VlRandomizer::clearConstraints() {
+    m_constraints.clear();
+    m_constraints_line.clear();
+    // Keep m_vars for class member randomization
+}
+
+void VlRandomizer::clearAll() {
+    m_constraints.clear();
+    m_vars.clear();
+    m_randcVarNames.clear();
+    m_randcValueQueues.clear();
+    m_randcConstraintHash = 0;
+}
+
+void VlRandomizer::markRandc(const char* name) { m_randcVarNames.insert(name); }
 
 #ifdef VL_DEBUG
 void VlRandomizer::dump() const {
     for (const auto& var : m_vars) {
-        VL_PRINTF("Variable (%d): %s\n", var.second->width(), var.second->name());
+        VL_PRINTF("Variable (%d): %s\n", var.second->width(), var.second->name().c_str());
     }
     for (const std::string& c : m_constraints) VL_PRINTF("Constraint: %s\n", c.c_str());
 }

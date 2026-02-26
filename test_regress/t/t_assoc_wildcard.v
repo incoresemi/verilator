@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2019 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2019 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -23,8 +23,8 @@ module t (/*AUTOARG*/
       begin
          // Wildcard
          typedef string dict_t [*];
-         string a [*] = '{default: "nope", "BBBBB": "fooing", 23'h434343: "baring"};
-         dict_t b = '{default: "nope", "BBBBB": "fooing", 23'h434343: "baring"};
+         static string a [*] = '{default: "nope", "BBBBB": "fooing", 23'h434343: "baring"};
+         static dict_t b = '{default: "nope", "BBBBB": "fooing", 23'h434343: "baring"};
          int k;
          string v;
 

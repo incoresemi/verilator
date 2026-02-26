@@ -1,16 +1,22 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2013-2024 by Wilson Snyder. This program is free software; you can
-// redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2013-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
 
 #include "sv_vpi_user.h"
 #include "vpi_user.h"
+
+#include <iostream>
+
+extern "C" {
+#include <libgen.h>
+}
 
 // Avoid C++11 in this file as not all simulators allow it
 
@@ -23,11 +29,11 @@ class TestVpiHandle {
 
 public:
     TestVpiHandle()
-        : m_handle(NULL)
-        , m_freeit(true) {}
+        : m_handle(NULL)  // Need (), not C++11
+        , m_freeit(true) {}  // Need (), not C++11
     TestVpiHandle(vpiHandle h)
-        : m_handle(h)
-        , m_freeit(true) {}
+        : m_handle(h)  // Need (), not C++11
+        , m_freeit(true) {}  // Need (), not C++11
     ~TestVpiHandle() { release(); }
     operator vpiHandle() const { return m_handle; }
     TestVpiHandle& operator=(vpiHandle h) {
@@ -521,3 +527,47 @@ const char* strFromVpiConstType(PLI_INT32 constType) {
     if (constType < 0) return names[0];
     return names[(constType <= vpiTimeConst) ? constType : 0];
 }
+
+#define FILENM basename(strdup(__FILE__))
+
+#define CHECK_RESULT_VH(got, exp) \
+    if ((got) != (exp)) { \
+        printf("%%Error: %s:%d: GOT = %p   EXP = %p\n", FILENM, __LINE__, (got), (exp)); \
+        return __LINE__; \
+    }
+
+#define CHECK_RESULT_NZ(got) \
+    if (!(got)) { \
+        printf("%%Error: %s:%d: GOT = NULL  EXP = !NULL\n", FILENM, __LINE__); \
+        return __LINE__; \
+    }
+
+#define CHECK_RESULT_Z(got) \
+    if (got) { \
+        printf("%%Error: %s:%d: GOT = !NULL  EXP = NULL\n", FILENM, __LINE__); \
+        return __LINE__; \
+    }
+
+// Use cout to avoid issues with %d/%lx etc
+#define CHECK_RESULT(got, exp) \
+    if ((got) != (exp)) { \
+        std::cout << std::dec << "%Error: " << FILENM << ":" << __LINE__ << ": GOT = " << (got) \
+                  << "   EXP = " << (exp) << std::endl; \
+        return __LINE__; \
+    }
+
+#define CHECK_RESULT_HEX(got, exp) \
+    if ((got) != (exp)) { \
+        std::cout << std::dec << "%Error: " << FILENM << ":" << __LINE__ << std::hex \
+                  << ": GOT = " << (got) << "   EXP = " << (exp) << std::endl; \
+        return __LINE__; \
+    }
+
+#define CHECK_RESULT_CSTR(got, exp) \
+    if (std::strcmp((got), (exp))) { \
+        printf("%%Error: %s:%d: GOT = '%s'   EXP = '%s'\n", FILENM, __LINE__, \
+               (got) ? (got) : "<null>", (exp) ? (exp) : "<null>"); \
+        return __LINE__; \
+    }
+
+#define CHECK_RESULT_CSTR_STRIP(got, exp) CHECK_RESULT_CSTR(got + strspn(got, " "), exp)

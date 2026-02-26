@@ -28,10 +28,21 @@
                                    : ... note: In instance 't'
    52 |          #100 $finish;
       |          ^
+                  ... For warning description see https://verilator.org/warn/STMTDLY?v=latest
+                  ... Use "/* verilator lint_off STMTDLY */" and lint_on around source to disable this message.
+%Warning-BLKSEQ: t/t_delay.v:45:20: Blocking assignment '=' in sequential logic process
+                                  : ... note: In instance 't'
+                                  : ... Suggest using delayed assignment '<='
+   45 |          dly_s.dly = 55;
+      |                    ^
+                 ... For warning description see https://verilator.org/warn/BLKSEQ?v=latest
+                 ... Use "/* verilator lint_off BLKSEQ */" and lint_on around source to disable this message.
 %Warning-UNUSEDSIGNAL: t/t_delay.v:21:16: Signal is not used: 'dly4'
                                         : ... note: In instance 't'
    21 |    wire [31:0] dly4;
       |                ^~~~
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=latest
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
 %Warning-UNUSEDSIGNAL: t/t_delay.v:24:12: Signal is not used: 'dly_s'
                                         : ... note: In instance 't'
    24 |    dly_s_t dly_s;
@@ -40,8 +51,4 @@
                                         : ... note: In instance 't.sub'
    59 |    realtime delay = 2.3;
       |             ^~~~~
-%Warning-BLKSEQ: t/t_delay.v:45:20: Blocking assignment '=' in sequential logic process
-                                  : ... Suggest using delayed assignment '<='
-   45 |          dly_s.dly = 55;
-      |                    ^
 %Error: Exiting due to

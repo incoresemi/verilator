@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed into the Public Domain, for any use,
-// without warranty, 2016 by Mandy Xu.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2016 Mandy Xu
 // SPDX-License-Identifier: CC0-1.0
 
 module t
@@ -21,7 +21,7 @@ module t
 
    wire [95: 0] lfsr_w = 1 >> P;
 
-   localparam [95: 0] lfsr_p = 1 >> P;
+   localparam [95: 0] LFSR_P = 1 >> P;
 
    initial begin
       $write("*-* All Finished *-*\n");

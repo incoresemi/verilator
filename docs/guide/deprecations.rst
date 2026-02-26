@@ -1,4 +1,4 @@
-.. Copyright 2003-2024 by Wilson Snyder.
+.. SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 .. SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 
 Deprecations
@@ -7,16 +7,12 @@ Deprecations
 The following deprecated items are scheduled for future removal:
 
 C++14 compiler support
-  Verilator currently requires a C++20 or newer compiler for timing, and a
-  C++14 or newer compiler for both compiling Verilator and compiling
-  Verilated models with --no-timing.
+   Verilator currently requires a C++20 or newer compiler for timing, and a
+   C++14 or newer compiler for both compiling Verilator and compiling
+   Verilated models with --no-timing.
 
-  Verilator will require C++20 or newer compilers for both compiling
-  Verilator and compiling all Verilated models no sooner than May 2025.
-  (Likely to be removed shortly after GitHub removes Ubuntu 20.04
-  continuous-integration action runners, which are used to test the older
-  C++ standard).
-
-XML output
-  Verilator currently supports XML parser output (enabled with `--xml-only`).
-  Support for `--xml-*` options will be deprecated no sooner than January 2026.
+   Verilator will require C++20 or newer compilers for both compiling
+   Verilator and compiling all Verilated models no sooner than May 2025.
+   (Although this date has expired, this change is currently on hold until
+   the Ubuntu LTS versions of GCC and clang use C++20 by default, estimated
+   May 2028.)

@@ -6,10 +6,10 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2024 by Wilson Snyder. This program is free software; you
-// can redistribute it and/or modify it under the terms of either the GNU
-// Lesser General Public License Version 3 or the Perl Artistic License
-// Version 2.0.
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of either the GNU Lesser General Public License Version 3
+// or the Perl Artistic License Version 2.0.
+// SPDX-FileCopyrightText: 2003-2026 Wilson Snyder
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
@@ -50,7 +50,8 @@ protected:
 
 private:
     // METHODS
-    const AstNodeDType* skipRefIterp(bool skipConst, bool skipEnum) const VL_MT_STABLE;
+    const AstNodeDType* skipRefIterp(bool skipConst, bool skipEnum,
+                                     bool assertOn = true) const VL_MT_STABLE;
 
 protected:
     // METHODS
@@ -77,6 +78,15 @@ public:
     AstNodeDType* skipRefp() VL_MT_STABLE {
         return const_cast<AstNodeDType*>(
             static_cast<const AstNodeDType*>(this)->skipRefIterp(true, true));
+    }
+    // (Slow) Recurse over MemberDType|ParamTypeDType|RefDType|ConstDType|EnumDType to other type,
+    // Returns null if not resolved
+    const AstNodeDType* skipRefOrNullp() const VL_MT_STABLE {
+        return skipRefIterp(true, true, false);
+    }
+    AstNodeDType* skipRefOrNullp() VL_MT_STABLE {
+        return const_cast<AstNodeDType*>(
+            static_cast<const AstNodeDType*>(this)->skipRefIterp(true, true, false));
     }
     // (Slow) Recurse over MemberDType|ParamTypeDType|RefDType|EnumDType to ConstDType
     const AstNodeDType* skipRefToConstp() const { return skipRefIterp(false, true); }
@@ -110,17 +120,11 @@ public:
     // Iff has second dtype, set as generic node function
     virtual void virtRefDType2p(AstNodeDType* nodep) {}
     // Assignable equivalence.  Calls skipRefToNonRefp() during comparisons.
-    bool similarDType(const AstNodeDType* samep) const {
-        const AstNodeDType* nodep = this;
-        nodep = nodep->skipRefToNonRefp();
-        samep = samep->skipRefToNonRefp();
-        if (nodep == samep) return true;
-        if (nodep->type() != samep->type()) return false;
-        return nodep->similarDTypeNode(samep);
-    }
-
+    bool similarDType(const AstNodeDType* samep) const;
     // Iff has a non-null subDTypep(), as generic node function
     virtual AstNodeDType* subDTypep() const VL_MT_STABLE { return nullptr; }
+    virtual AstNodeDType* subDType2p() const VL_MT_STABLE { return nullptr; }
+    virtual bool isAggregateType() const { return false; }
     virtual bool isFourstate() const;
     // Ideally an IEEE $typename
     virtual string prettyDTypeName(bool) const { return prettyTypeName(); }
@@ -154,15 +158,16 @@ public:
     bool widthSized() const VL_MT_SAFE { return !m_widthMin || m_widthMin == m_width; }
     bool generic() const VL_MT_SAFE { return m_generic; }
     void generic(bool flag) { m_generic = flag; }
-    std::pair<uint32_t, uint32_t> dimensions(bool includeBasic);
-    uint32_t arrayUnpackedElements();  // 1, or total multiplication of all dimensions
+    std::pair<uint32_t, uint32_t> dimensions(bool includeBasic) const;
+    uint32_t arrayUnpackedElements() const;  // 1, or total multiplication of all dimensions
     static int uniqueNumInc() { return ++s_uniqueNum; }
     const char* charIQWN() const {
-        return (isString() ? "N" : isWide() ? "W" : isQuad() ? "Q" : "I");
+        return (isString() ? "N" : isWide() ? "W" : isDouble() ? "D" : isQuad() ? "Q" : "I");
     }
     string cType(const string& name, bool forFunc, bool isRef, bool packed = false) const;
     // Represents a C++ LiteralType? (can be constexpr)
     bool isLiteralType() const VL_MT_STABLE;
+    virtual bool isDynamicallySized() const { return false; }
 
 private:
     class CTypeRecursed;
@@ -229,7 +234,8 @@ class AstNodeUOrStructDType VL_NOT_FINAL : public AstNodeDType {
     string m_name;  // Name from upper typedef, if any
     const int m_uniqueNum;
     bool m_packed;
-    bool m_isFourstate = false;  // V3Width computes
+    bool m_isFourstate = false;  // V3Width computes; true if any member is 4-state
+    bool m_constrainedRand = false;  // True if struct has constraint expression
 
 protected:
     AstNodeUOrStructDType(VNType t, FileLine* fl, VSigning numericUnpack)
@@ -240,11 +246,12 @@ protected:
         numeric(VSigning::fromBool(numericUnpack.isSigned()));
     }
     AstNodeUOrStructDType(const AstNodeUOrStructDType& other)
-        : AstNodeDType(other)
-        , m_name(other.m_name)
-        , m_uniqueNum(uniqueNumInc())
-        , m_packed(other.m_packed)
-        , m_isFourstate(other.m_isFourstate) {}
+        : AstNodeDType{other}
+        , m_name{other.m_name}
+        , m_uniqueNum{uniqueNumInc()}
+        , m_packed{other.m_packed}
+        , m_isFourstate{other.m_isFourstate}
+        , m_constrainedRand{false} {}
 
 public:
     ASTGEN_MEMBERS_AstNodeUOrStructDType;
@@ -284,6 +291,8 @@ public:
     VNumRange declRange() const VL_MT_STABLE { return VNumRange{hi(), lo()}; }
     AstNodeModule* classOrPackagep() const { return m_classOrPackagep; }
     void classOrPackagep(AstNodeModule* classpackagep) { m_classOrPackagep = classpackagep; }
+    bool isConstrainedRand() const { return m_constrainedRand; }
+    void markConstrainedRand(bool flag) { m_constrainedRand = flag; }
 };
 
 // === Concrete node types =====================================================
@@ -356,6 +365,10 @@ public:
     AstNodeDType* subDTypep() const override VL_MT_STABLE {
         return m_refDTypep ? m_refDTypep : childDTypep();
     }
+    AstNodeDType* subDType2p() const override VL_MT_STABLE {
+        return m_keyDTypep ? m_keyDTypep : keyChildDTypep();
+    }
+    bool isAggregateType() const override { return true; }
     void refDTypep(AstNodeDType* nodep) { m_refDTypep = nodep; }
     AstNodeDType* virtRefDTypep() const override { return m_refDTypep; }
     void virtRefDTypep(AstNodeDType* nodep) override { refDTypep(nodep); }
@@ -371,6 +384,7 @@ public:
     int widthAlignBytes() const override { return subDTypep()->widthAlignBytes(); }
     int widthTotalBytes() const override { return subDTypep()->widthTotalBytes(); }
     bool isCompound() const override { return true; }
+    bool isDynamicallySized() const override { return true; }
 };
 class AstBasicDType final : public AstNodeDType {
     // Builtin atomic/vectored data type
@@ -416,11 +430,13 @@ public:
     void dumpJson(std::ostream& str) const override;
     // width/widthMin/numeric compared elsewhere
     bool sameNode(const AstNode* samep) const override;
-    bool similarDTypeNode(const AstNodeDType* samep) const override { return sameNode(samep); }
+    bool similarDTypeNode(const AstNodeDType* samep) const override;
     string name() const override VL_MT_STABLE { return m.m_keyword.ascii(); }
     string prettyDTypeName(bool full) const override;
     const char* broken() const override {
         BROKEN_RTN(dtypep() != this);
+        BROKEN_RTN(v3Global.widthMinUsage() == VWidthMinUsage::VERILOG_WIDTH
+                   && widthMin() > width());
         return nullptr;
     }
     void setSignedState(const VSigning& signst) {
@@ -444,7 +460,6 @@ public:
     bool isBitLogic() const { return keyword().isBitLogic(); }
     bool isDouble() const VL_MT_STABLE { return keyword().isDouble(); }
     bool isEvent() const VL_MT_STABLE { return keyword() == VBasicDTypeKwd::EVENT; }
-    bool isTriggerVec() const VL_MT_SAFE { return keyword() == VBasicDTypeKwd::TRIGGERVEC; }
     bool isForkSync() const VL_MT_SAFE { return keyword() == VBasicDTypeKwd::FORK_SYNC; }
     bool isProcessRef() const VL_MT_SAFE { return keyword() == VBasicDTypeKwd::PROCESS_REFERENCE; }
     bool isDelayScheduler() const VL_MT_SAFE {
@@ -458,6 +473,9 @@ public:
     }
     bool isRandomGenerator() const VL_MT_SAFE {
         return keyword() == VBasicDTypeKwd::RANDOM_GENERATOR;
+    }
+    bool isStdRandomGenerator() const VL_MT_SAFE {
+        return keyword() == VBasicDTypeKwd::RANDOM_STDGENERATOR;
     }
     bool isOpaque() const VL_MT_SAFE { return keyword().isOpaque(); }
     bool isString() const VL_MT_STABLE { return keyword().isString(); }
@@ -518,7 +536,7 @@ public:
     AstCDType(FileLine* fl, const string& name)
         : ASTGEN_SUPER_CDType(fl)
         , m_name{name} {
-        this->dtypep(this);
+        dtypep(this);
     }
 
 public:
@@ -558,8 +576,8 @@ public:
     AstClassRefDType(FileLine* fl, AstClass* classp, AstPin* paramsp)
         : ASTGEN_SUPER_ClassRefDType(fl)
         , m_classp{classp} {
-        this->dtypep(this);
-        this->addParamsp(paramsp);
+        dtypep(this);
+        addParamsp(paramsp);
     }
     ASTGEN_MEMBERS_AstClassRefDType;
     // METHODS
@@ -567,7 +585,11 @@ public:
         const AstClassRefDType* const asamep = VN_DBG_AS(samep, ClassRefDType);
         return (m_classp == asamep->m_classp && m_classOrPackagep == asamep->m_classOrPackagep);
     }
-    bool similarDTypeNode(const AstNodeDType* samep) const override { return sameNode(samep); }
+    bool similarDTypeNode(const AstNodeDType* samep) const override {
+        // Doesn't need to compare m_classOrPackagep
+        const AstClassRefDType* const asamep = VN_DBG_AS(samep, ClassRefDType);
+        return m_classp == asamep->m_classp;
+    }
     void dump(std::ostream& str = std::cout) const override;
     void dumpJson(std::ostream& str = std::cout) const override;
     void dumpSmall(std::ostream& str) const override;
@@ -654,25 +676,20 @@ class AstDefImplicitDType final : public AstNodeDType {
     // After link, these become typedefs
     // @astgen op1 := childDTypep : Optional[AstNodeDType]
     string m_name;
-    void* m_containerp;  // In what scope is the name unique, so we can know what are duplicate
-                         // definitions (arbitrary value)
     const int m_uniqueNum;
 
 public:
-    AstDefImplicitDType(FileLine* fl, const string& name, void* containerp, VFlagChildDType,
-                        AstNodeDType* dtp)
+    AstDefImplicitDType(FileLine* fl, const string& name, VFlagChildDType, AstNodeDType* dtp)
         : ASTGEN_SUPER_DefImplicitDType(fl)
         , m_name{name}
-        , m_containerp{containerp}
         , m_uniqueNum{uniqueNumInc()} {
         childDTypep(dtp);  // Only for parser
         dtypep(nullptr);  // V3Width will resolve
     }
     AstDefImplicitDType(const AstDefImplicitDType& other)
         : AstNodeDType(other)
-        , m_name(other.m_name)
-        , m_containerp(other.m_containerp)
-        , m_uniqueNum(uniqueNumInc()) {}
+        , m_name{other.m_name}
+        , m_uniqueNum{uniqueNumInc()} {}
     ASTGEN_MEMBERS_AstDefImplicitDType;
     int uniqueNum() const { return m_uniqueNum; }
     bool sameNode(const AstNode* samep) const override {
@@ -684,7 +701,6 @@ public:
     AstNodeDType* subDTypep() const override VL_MT_STABLE {
         return dtypep() ? dtypep() : childDTypep();
     }
-    void* containerp() const { return m_containerp; }
     // METHODS
     // op1 = Range of variable
     AstNodeDType* dtypeSkipRefp() const { return dtypep()->skipRefp(); }
@@ -732,6 +748,7 @@ public:
     AstNodeDType* subDTypep() const override VL_MT_STABLE {
         return m_refDTypep ? m_refDTypep : childDTypep();
     }
+    bool isAggregateType() const override { return true; }
     void refDTypep(AstNodeDType* nodep) { m_refDTypep = nodep; }
     AstNodeDType* virtRefDTypep() const override { return m_refDTypep; }
     void virtRefDTypep(AstNodeDType* nodep) override { refDTypep(nodep); }
@@ -740,6 +757,7 @@ public:
     int widthAlignBytes() const override { return subDTypep()->widthAlignBytes(); }
     int widthTotalBytes() const override { return subDTypep()->widthTotalBytes(); }
     bool isCompound() const override { return true; }
+    bool isDynamicallySized() const override { return true; }
 };
 class AstEmptyQueueDType final : public AstNodeDType {
     // For EmptyQueue
@@ -773,7 +791,7 @@ public:
 
 private:
     string m_name;  // Name from upper typedef, if any
-    const int m_uniqueNum = 0;
+    const int m_uniqueNum;
     TableMap m_tableMap;  // Created table for V3Width only to remove duplicates
 
 public:
@@ -787,9 +805,9 @@ public:
         widthFromSub(subDTypep());
     }
     AstEnumDType(const AstEnumDType& other)
-        : AstNodeDType(other)
-        , m_name(other.m_name)
-        , m_uniqueNum(uniqueNumInc()) {}
+        : AstNodeDType{other}
+        , m_name{other.m_name}
+        , m_uniqueNum{uniqueNumInc()} {}
     ASTGEN_MEMBERS_AstEnumDType;
 
     const char* broken() const override;
@@ -824,6 +842,40 @@ public:
     bool isCompound() const override { return false; }
     TableMap& tableMap() { return m_tableMap; }
     const TableMap& tableMap() const { return m_tableMap; }
+};
+
+class AstIfaceGenericDType final : public AstNodeDType {
+    // Generic interface that will be replaced with AstIfaceRefDType
+    FileLine* m_modportFileline;  // Where modport token was
+    string m_modportName;  // "" = no modport
+public:
+    explicit AstIfaceGenericDType(FileLine* fl)
+        : ASTGEN_SUPER_IfaceGenericDType(fl) {
+        dtypep(this);
+    }
+    AstIfaceGenericDType(FileLine* fl, FileLine* modportFl, const string& modport)
+        : ASTGEN_SUPER_IfaceGenericDType(fl)
+        , m_modportFileline{modportFl}
+        , m_modportName{modport} {
+        dtypep(this);
+    }
+    ASTGEN_MEMBERS_AstIfaceGenericDType;
+    void dumpSmall(std::ostream& str) const override;
+    bool hasDType() const override VL_MT_SAFE { return true; }
+    bool maybePointedTo() const override VL_MT_SAFE { return true; }
+    bool undead() const override { return true; }
+    AstNodeDType* subDTypep() const override VL_MT_STABLE { return nullptr; }
+    AstNodeDType* virtRefDTypep() const override { return nullptr; }
+    void virtRefDTypep(AstNodeDType* nodep) override {}
+    bool similarDTypeNode(const AstNodeDType* samep) const override { return this == samep; }
+    AstBasicDType* basicp() const override VL_MT_STABLE { return nullptr; }
+    int widthAlignBytes() const override { return 1; }
+    int widthTotalBytes() const override { return 1; }
+    string modportName() const { return m_modportName; }
+    bool isModport() { return !m_modportName.empty(); }
+    bool isCompound() const override { return true; }
+    FileLine* modportFileline() const { return m_modportFileline; }
+    string name() const override { return m_modportName; }
 };
 
 class AstIfaceRefDType final : public AstNodeDType {
@@ -879,11 +931,13 @@ public:
         if (flag) v3Global.setHasVirtIfaces();
     }
     FileLine* modportFileline() const { return m_modportFileline; }
+    void modportFileline(FileLine* const modportFileline) { m_modportFileline = modportFileline; }
     string cellName() const { return m_cellName; }
     void cellName(const string& name) { m_cellName = name; }
     string ifaceName() const { return m_ifaceName; }
     string ifaceNameQ() const { return "'" + prettyName(ifaceName()) + "'"; }
     void ifaceName(const string& name) { m_ifaceName = name; }
+    void modportName(const string& modportName) { m_modportName = modportName; }
     string modportName() const { return m_modportName; }
     AstIface* ifaceViaCellp() const;  // Use cellp or ifacep
     AstIface* ifacep() const { return m_ifacep; }
@@ -903,14 +957,16 @@ class AstMemberDType final : public AstNodeDType {
     //
     // @astgen ptr := m_refDTypep : Optional[AstNodeDType]  // Elements of this type (post-width)
     string m_name;  // Name of variable
-    string m_tag;  // Holds the string of the verilator tag -- used in XML output.
+    string m_tag;  // Holds the string of the verilator tag -- used in JSON output.
     int m_lsb = -1;  // Within this level's packed struct, the LSB of the first bit of the member
+    bool m_constrainedRand = false;
     // UNSUP: int m_randType;    // Randomization type (IEEE)
 public:
     AstMemberDType(FileLine* fl, const string& name, VFlagChildDType, AstNodeDType* dtp,
                    AstNode* valuep)
         : ASTGEN_SUPER_MemberDType(fl)
-        , m_name{name} {
+        , m_name{name}
+        , m_constrainedRand{false} {
         childDTypep(dtp);  // Only for parser
         this->valuep(valuep);
         dtypep(nullptr);  // V3Width will resolve
@@ -918,13 +974,16 @@ public:
     }
     AstMemberDType(FileLine* fl, const string& name, AstNodeDType* dtp)
         : ASTGEN_SUPER_MemberDType(fl)
-        , m_name{name} {
+        , m_name{name}
+        , m_constrainedRand{false} {
         UASSERT(dtp, "AstMember created with no dtype");
         refDTypep(dtp);
         dtypep(this);
         widthFromSub(subDTypep());
     }
     ASTGEN_MEMBERS_AstMemberDType;
+    void dump(std::ostream& str = std::cout) const override;
+    void dumpJson(std::ostream& str = std::cout) const override;
     void dumpSmall(std::ostream& str) const override;
     string name() const override VL_MT_STABLE { return m_name; }  // * = Var name
     bool hasDType() const override VL_MT_SAFE { return true; }
@@ -958,6 +1017,8 @@ public:
         v3fatalSrc("call isCompound on subdata type, not reference");
         return false;
     }
+    bool isConstrainedRand() const { return m_constrainedRand; }
+    void markConstrainedRand(bool flag) { m_constrainedRand = flag; }
 };
 class AstNBACommitQueueDType final : public AstNodeDType {
     // @astgen ptr := m_subDTypep : AstNodeDType  // Type of the corresponding variable
@@ -989,12 +1050,14 @@ class AstParamTypeDType final : public AstNodeDType {
     // A parameter type statement; much like a var or typedef
     // @astgen op1 := childDTypep : Optional[AstNodeDType]
     const VVarType m_varType;  // Type of variable (for localparam vs. param)
+    const VFwdType m_fwdType;  // Forward type for lint check
     string m_name;  // Name of variable
 public:
-    AstParamTypeDType(FileLine* fl, VVarType type, const string& name, VFlagChildDType,
-                      AstNodeDType* dtp)
+    AstParamTypeDType(FileLine* fl, VVarType type, VFwdType fwdType, const string& name,
+                      VFlagChildDType, AstNodeDType* dtp)
         : ASTGEN_SUPER_ParamTypeDType(fl)
         , m_varType{type}
+        , m_fwdType{fwdType}
         , m_name{name} {
         childDTypep(dtp);  // Only for parser
         dtypep(nullptr);  // V3Width will resolve
@@ -1019,6 +1082,7 @@ public:
     bool hasDType() const override VL_MT_SAFE { return true; }
     void name(const string& flag) override { m_name = flag; }
     VVarType varType() const { return m_varType; }  // * = Type of variable
+    VFwdType fwdType() const { return m_fwdType; }
     bool isParam() const { return true; }
     bool isGParam() const { return (varType() == VVarType::GPARAM); }
     bool isCompound() const override {
@@ -1030,9 +1094,11 @@ class AstParseTypeDType final : public AstNodeDType {
     // Parents: VAR
     // During parsing, this indicates the type of a parameter is a "parameter type"
     // e.g. the data type is a container of any data type
+    const VFwdType m_fwdType;  // Forward type for lint check
 public:
-    explicit AstParseTypeDType(FileLine* fl)
-        : ASTGEN_SUPER_ParseTypeDType(fl) {}
+    explicit AstParseTypeDType(FileLine* fl, VFwdType fwdType = VFwdType::NONE)
+        : ASTGEN_SUPER_ParseTypeDType(fl)
+        , m_fwdType{fwdType} {}
     ASTGEN_MEMBERS_AstParseTypeDType;
     AstNodeDType* dtypep() const VL_MT_STABLE { return nullptr; }
     // METHODS
@@ -1044,6 +1110,7 @@ public:
         v3fatalSrc("call isCompound on subdata type, not reference");
         return false;
     }
+    VFwdType fwdType() const { return m_fwdType; }
 };
 class AstQueueDType final : public AstNodeDType {
     // Queue array data type, ie "[ $ ]"
@@ -1054,7 +1121,7 @@ class AstQueueDType final : public AstNodeDType {
 public:
     AstQueueDType(FileLine* fl, VFlagChildDType, AstNodeDType* dtp, AstNodeExpr* boundp)
         : ASTGEN_SUPER_QueueDType(fl) {
-        this->childDTypep(dtp);
+        childDTypep(dtp);
         this->boundp(boundp);
         refDTypep(nullptr);
         dtypep(nullptr);  // V3Width will resolve
@@ -1085,6 +1152,7 @@ public:
     AstNodeDType* subDTypep() const override VL_MT_STABLE {
         return m_refDTypep ? m_refDTypep : childDTypep();
     }
+    bool isAggregateType() const override { return true; }
     void refDTypep(AstNodeDType* nodep) { m_refDTypep = nodep; }
     inline int boundConst() const VL_MT_STABLE;
     AstNodeDType* virtRefDTypep() const override { return m_refDTypep; }
@@ -1094,6 +1162,7 @@ public:
     int widthAlignBytes() const override { return subDTypep()->widthAlignBytes(); }
     int widthTotalBytes() const override { return subDTypep()->widthTotalBytes(); }
     bool isCompound() const override { return true; }
+    bool isDynamicallySized() const override { return true; }
 };
 class AstRefDType final : public AstNodeDType {
     // @astgen op1 := typeofp : Optional[AstNode<AstNodeExpr|AstNodeDType>]
@@ -1102,6 +1171,7 @@ class AstRefDType final : public AstNodeDType {
     //
     // Pre-Width must reference the Typeref, not what it points to, as some child
     // types like AstBracketArrayType will disappear and can't lose the handle
+    //
     // @astgen ptr := m_typedefp : Optional[AstTypedef]  // Referenced type
     // Post-width typedefs are removed and point to type directly
     // @astgen ptr := m_refDTypep : Optional[AstNodeDType]  // Data type references
@@ -1114,7 +1184,7 @@ public:
     AstRefDType(FileLine* fl, const string& name, AstNodeExpr* classOrPackagep, AstPin* paramsp)
         : ASTGEN_SUPER_RefDType(fl)
         , m_name{name} {
-        this->classOrPackageOpp(classOrPackagep);
+        classOrPackageOpp(classOrPackagep);
         addParamsp(paramsp);
     }
     class FlagTypeOfExpr {};  // type(expr) for parser only
@@ -1144,6 +1214,7 @@ public:
         return subDTypep() ? subDTypep()->basicp() : nullptr;
     }
     AstNodeDType* subDTypep() const override VL_MT_STABLE;
+    AstNodeDType* getChildDTypep() const override { return VN_CAST(typeofp(), NodeDType); }
     int widthAlignBytes() const override { return dtypeSkipRefp()->widthAlignBytes(); }
     int widthTotalBytes() const override { return dtypeSkipRefp()->widthTotalBytes(); }
     void name(const string& flag) override { m_name = flag; }
@@ -1160,6 +1231,33 @@ public:
         v3fatalSrc("call isCompound on subdata type, not reference");
         return false;
     }
+};
+class AstRequireDType final : public AstNodeDType {
+    // @astgen op1 := lhsp : Optional[AstNode<AstNodeExpr|AstNodeDType>]
+    //
+    // Require a generic node type (typically AstParseRef become a type.
+public:
+    AstRequireDType(FileLine* fl, AstNode* lhsp)
+        : ASTGEN_SUPER_RequireDType(fl) {
+        this->lhsp(lhsp);
+    }
+    ASTGEN_MEMBERS_AstRequireDType;
+    // METHODS
+    bool similarDTypeNode(const AstNodeDType* samep) const override {
+        const AstRequireDType* const asamep = VN_DBG_AS(samep, RequireDType);
+        return subDTypep()->similarDType(asamep->subDTypep());
+    }
+    AstBasicDType* basicp() const override VL_MT_STABLE { return nullptr; }
+    AstNodeDType* subDTypep() const override VL_MT_STABLE {
+        // Used for recursive definition checking
+        if (AstNodeDType* const dtp = VN_CAST(lhsp(), NodeDType))
+            return dtp;
+        else
+            return nullptr;
+    }
+    int widthAlignBytes() const override { V3ERROR_NA_RETURN(1); }
+    int widthTotalBytes() const override { V3ERROR_NA_RETURN(1); }
+    bool isCompound() const override { V3ERROR_NA_RETURN(false); }
 };
 class AstSampleQueueDType final : public AstNodeDType {
     // @astgen op1 := childDTypep : Optional[AstNodeDType] // moved to refDTypep() in V3Width
@@ -1275,7 +1373,7 @@ public:
     AstNodeDType* subDTypep() const override VL_MT_STABLE { return nullptr; }
     AstNodeDType* virtRefDTypep() const override { return nullptr; }
     void virtRefDTypep(AstNodeDType* nodep) override {}
-    bool similarDTypeNode(const AstNodeDType* samep) const override { return this == samep; }
+    bool similarDTypeNode(const AstNodeDType* samep) const override { return true; }
     AstBasicDType* basicp() const override VL_MT_STABLE { return nullptr; }
     int widthAlignBytes() const override { return 1; }
     int widthTotalBytes() const override { return 1; }
@@ -1331,7 +1429,7 @@ class AstUnpackArrayDType final : public AstNodeArrayDType {
 public:
     AstUnpackArrayDType(FileLine* fl, VFlagChildDType, AstNodeDType* dtp, AstRange* rangep)
         : ASTGEN_SUPER_UnpackArrayDType(fl) {
-        this->childDTypep(dtp);  // Only for parser
+        childDTypep(dtp);  // Only for parser
         this->rangep(rangep);
         refDTypep(nullptr);
         dtypep(nullptr);  // V3Width will resolve
@@ -1354,6 +1452,7 @@ public:
         const AstUnpackArrayDType* const sp = VN_DBG_AS(samep, UnpackArrayDType);
         return m_isCompound == sp->m_isCompound;
     }
+    bool isAggregateType() const override { return true; }
     // Outer dimension comes first. The first element is this node.
     std::vector<AstUnpackArrayDType*> unpackDimensions();
     void isCompound(bool flag) { m_isCompound = flag; }
@@ -1371,13 +1470,25 @@ public:
     string verilogKwd() const override { return "struct"; }
 };
 class AstUnionDType final : public AstNodeUOrStructDType {
+    bool m_isSoft;  // Is a "union soft"
+    bool m_isTagged;  // Is a "union tagged"
+
 public:
-    // UNSUP: bool isTagged;
     // VSigning below is mispurposed to indicate if packed or not
-    AstUnionDType(FileLine* fl, VSigning numericUnpack)
-        : ASTGEN_SUPER_UnionDType(fl, numericUnpack) {}
+    // isSoft implies packed
+    AstUnionDType(FileLine* fl, bool isSoft, bool isTagged, VSigning numericUnpack)
+        : ASTGEN_SUPER_UnionDType(fl, numericUnpack)
+        , m_isSoft{isSoft}
+        , m_isTagged{isTagged} {
+        packed(packed() | m_isSoft);
+    }
     ASTGEN_MEMBERS_AstUnionDType;
     string verilogKwd() const override { return "union"; }
+    bool isSoft() const { return m_isSoft; }
+    bool isTagged() const { return m_isTagged; }
+    bool sameNode(const AstNode* samep) const override;
+    void dump(std::ostream& str) const override;
+    void dumpJson(std::ostream& str) const override;
 };
 
 #endif  // Guard

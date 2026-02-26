@@ -1,11 +1,13 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Geza Lore.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Geza Lore
 // SPDX-License-Identifier: CC0-1.0
 
+// verilog_format: off
 `define stop $stop
 `define checkh(gotv,expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got='h%x exp='h%x\n", `__FILE__,`__LINE__, (gotv), (expv)); `stop; end while(0)
+// verilog_format: on
 
 module t (/*AUTOARG*/
    // Inputs
@@ -18,9 +20,10 @@ module t (/*AUTOARG*/
    always @(posedge clk) cyc <= cyc + 1;
 
    wire  net_1;
-   wire [7:0] net_8;
+   wire [7:0] net_8, alias_net_8;
    assign net_1 = ~cyc[0];
    assign net_8 = ~cyc[1 +: 8];
+   alias net_8 = alias_net_8;
 
    always @ (posedge clk) begin
       $display("%d pre : %x %x", cyc, net_8, net_1);
@@ -118,6 +121,7 @@ module t (/*AUTOARG*/
         end
         default: begin
            `checkh ({net_8, net_1}, ~cyc[0 +: 9]);
+           `checkh ({alias_net_8, net_1}, ~cyc[0 +: 9]);
         end
       endcase
 

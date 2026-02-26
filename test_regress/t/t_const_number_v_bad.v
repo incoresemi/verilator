@@ -1,10 +1,10 @@
 // DESCRIPTION: Verilator: Test of Verilog and SystemVerilog integer literal differences
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Ethan Sifferman.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Ethan Sifferman
 // SPDX-License-Identifier: CC0-1.0
 
-module t (/*AUTOARG*/);
+module t;
 
     // "unbased_unsized_literal" is SystemVerilog only
     // Should fail with "NEWERSTD"

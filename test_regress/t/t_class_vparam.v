@@ -2,8 +2,8 @@
 //
 // Simple bi-directional alias test.
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2020 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2020 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 typedef class paramed_class_t;
@@ -22,7 +22,7 @@ class arg_class_t;
    int ifield;
 endclass
 
-module t (/*AUTOARG*/);
+module t;
 
    vclass vir;
    paramed_class_t#(arg_class_t) argu;

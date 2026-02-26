@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2022 by Antmicro Ltd.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2022 Antmicro Ltd
 // SPDX-License-Identifier: CC0-1.0
 
 `ifdef TEST_VERBOSE
@@ -11,11 +11,11 @@
 `endif
 
 module t;
-   logic clk = 0;
+   bit clk = 0;
    always #3 clk = ~clk;
 
-   logic flag_a;
-   logic flag_b;
+   bit flag_a;
+   bit flag_b;
    always @(posedge clk)
    begin
       `WRITE_VERBOSE(("[%0t] b <= 0\n", $time));

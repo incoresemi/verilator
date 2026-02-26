@@ -1,7 +1,7 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2014 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2014 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 `define stop $stop
@@ -20,10 +20,6 @@ endpackage
 class my_cls;
    static function int get_cnt1;
       static int cnt = 0;
-      return ++cnt;
-   endfunction
-   static function static int get_cnt2;
-      int cnt = 0;
       return ++cnt;
    endfunction
 endclass
@@ -103,8 +99,6 @@ module t (/*AUTOARG*/
       //
       v = my_cls::get_cnt1(); `checkh(v,   1);
       v = my_cls::get_cnt1(); `checkh(v,   2);
-      v = my_cls::get_cnt2(); `checkh(v,   1);
-      v = my_cls::get_cnt2(); `checkh(v,   2);
       //
    end
 

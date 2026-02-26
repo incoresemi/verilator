@@ -1,31 +1,19 @@
 // DESCRIPTION: Verilator: Verilog Test module
 //
-// Use this file as a template for submitting bugs, etc.
-// This module takes a single clock input, and should either
-//      $write("*-* All Finished *-*\n");
-//      $finish;
-// on success, or $stop.
-//
-// The code as shown applies a random vector to the Test
-// module, then calculates a CRC on the Test module's outputs.
-//
-// **If you do not wish for your code to be released to the public
-// please note it here, otherwise:**
-//
-// This file ONLY is placed under the Creative Commons Public Domain, for
-// any use, without warranty, 2023 by Wilson Snyder.
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2023 Wilson Snyder
 // SPDX-License-Identifier: CC0-1.0
 
 module t;
     typedef struct{
-        logic [31:0] subarr[4];
+        bit [31:0] subarr[4];
     } arr_str_t;
     typedef struct {
         string txt;
         struct {
-            logic m0;
-            logic [3:0] m1;
-            logic [7:0] arr[2][3];
+            bit m0;
+            bit [3:0] m1;
+            bit [7:0] arr[2][3];
             arr_str_t str[5];
         } sub;
     } struct_t;
@@ -56,6 +44,7 @@ module t;
     assign s3.sub.arr[1][2] = 8'h06;
 
     initial begin
+        #1;
         if(s3 == s1) $stop;
         if(s1 == s2 && s3 != s1) begin
             $write("*-* All Finished *-*\n");
